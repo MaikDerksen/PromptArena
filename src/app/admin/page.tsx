@@ -13,7 +13,7 @@ import ImageCard from '@/components/image-card';
 import GameStatusBadge from '@/components/game-status-badge';
 import { AlertCircle, Edit3, Play, RotateCcw, SkipForward, Eye, UserCheck, UserX, Image as ImageIcon, CheckCircle, Wifi, HelpCircle } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import type { Timestamp } from 'firebase/firestore'; // Corrected: import Timestamp
+import { Timestamp } from 'firebase/firestore'; // Corrected: import Timestamp as a value
 import { generateImage } from '@/ai/flows/generate-image'; 
 
 const formatLastSeen = (lastSeen: Timestamp | Date | null): {text: string, icon: JSX.Element} => {

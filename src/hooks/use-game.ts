@@ -22,7 +22,7 @@ const defaultGameData: Game = {
   playerTwoTypingPrompt: "",
   playerOneLastSeen: null,
   playerTwoLastSeen: null,
-  imagesRevealed: false, // Changed from promptsRevealed
+  imagesRevealed: false,
 };
 
 export function useGame() {
@@ -41,6 +41,7 @@ export function useGame() {
       } else {
         try {
           await setDoc(gameDocRef, { ...defaultGameData, createdAt: serverTimestamp(), updatedAt: serverTimestamp() });
+          // setGame(defaultGameData); // Set game state after initialization
         } catch (e: any) {
           console.error("Error initializing game:", e);
           setError("Failed to initialize game data.");
@@ -73,11 +74,18 @@ export function useGame() {
     await updateGameData({ prompt });
   }, [updateGameData]);
 
+  const updatePlayerLastSeen = useCallback(async (player: PlayerKey) => {
+    const lastSeenField = player === "playerOne" ? "playerOneLastSeen" : "playerTwoLastSeen";
+    try {
+      await updateGameData({ [lastSeenField]: serverTimestamp() });
+    } catch (e) {
+      // Error already handled by updateGameData
+    }
+  }, [updateGameData]);
+
   const updatePlayerTypingPrompt = useCallback(async (player: PlayerKey, typingPrompt: string) => {
     const typingField = player === "playerOne" ? "playerOneTypingPrompt" : "playerTwoTypingPrompt";
     const lastSeenField = player === "playerOne" ? "playerOneLastSeen" : "playerTwoLastSeen";
-    // If player clears input, also clear final prompt if no image is generated yet
-    // This allows re-submission before image generation if they clear the input
     const finalPromptField = player === "playerOne" ? "playerOnePrompt" : "playerTwoPrompt";
     const imageField = player === "playerOne" ? "playerOneImage" : "playerTwoImage";
     
@@ -86,9 +94,15 @@ export function useGame() {
       [lastSeenField]: serverTimestamp(),
     };
 
-    if (typingPrompt === "" && game && !game[imageField]) {
-      updates[finalPromptField] = ""; // Allow clearing final prompt if no image yet
+    // If player clears input, also clear final prompt *and image* if no image is generated yet or if they are allowed to resubmit
+    // Current logic in PlayerPromptForm handles enabling/disabling submit, this just ensures data consistency.
+    if (typingPrompt === "" && game && !game[imageField]) { 
+        // If they clear typing, and no image exists for their final prompt, 
+        // clear the final prompt too. This means they abandoned that submission attempt.
+        // The image field itself is not cleared here, only on new submission or reset.
+      updates[finalPromptField] = ""; 
     }
+
 
     await updateGameData(updates);
   }, [updateGameData, game]);
@@ -99,22 +113,25 @@ export function useGame() {
     const typingField = player === "playerOne" ? "playerOneTypingPrompt" : "playerTwoTypingPrompt";
     const lastSeenField = player === "playerOne" ? "playerOneLastSeen" : "playerTwoLastSeen";
 
+    // Clear previous image for this player before generating a new one
     await updateGameData({ 
       [promptField]: playerPrompt,
-      [typingField]: "", 
+      [imageField]: "", // Clear existing image for this player
+      [typingField]: "", // Clear typing prompt after submission
       [lastSeenField]: serverTimestamp()
     });
 
     try {
       const { imageUrl } = await genImageFlow({ prompt: playerPrompt });
-      await updateGameData({ [imageField]: imageUrl });
+      await updateGameData({ [imageField]: imageUrl, [lastSeenField]: serverTimestamp() }); // Update lastSeen again after image gen
       toast({ title: "Submission Successful", description: `${player === "playerOne" ? "Player One's" : "Player Two's"} image generated.` });
       return imageUrl;
     } catch (e: any) {
       console.error(`Error generating image for ${player}:`, e);
       toast({ title: "Image Generation Failed", description: e.message || "Could not generate image.", variant: "destructive" });
-      // Clear the image field if generation fails so it doesn't show a broken/old one
-      await updateGameData({ [imageField]: "" });
+      // The image field was already cleared, so no need to clear it again on error here.
+      // We might want to clear the promptField if generation fails and they should retry
+      // await updateGameData({ [promptField]: "", [lastSeenField]: serverTimestamp() });
       throw e;
     }
   }, [updateGameData, toast]);
@@ -124,7 +141,7 @@ export function useGame() {
     toast({title: "Game Status Updated", description: `Status set to ${status}.`});
   }, [updateGameData, toast]);
   
-  const revealImages = useCallback(async () => { // Renamed from revealPrompts
+  const revealImages = useCallback(async () => { 
     await updateGameData({ imagesRevealed: true });
     toast({title: "Images Revealed", description: "Player images are now visible to viewers."});
   }, [updateGameData, toast]);
@@ -137,23 +154,32 @@ export function useGame() {
       playerTwoImage: "",
       playerOneTypingPrompt: "",
       playerTwoTypingPrompt: "",
-      playerOneLastSeen: null,
-      playerTwoLastSeen: null,
-      imagesRevealed: false, // Changed from promptsRevealed
+      imagesRevealed: false, 
       status: "waiting",
+      // Keep playerOneLastSeen and playerTwoLastSeen as they are, or set to null?
+      // Setting to null might be better to indicate they are not "active" in the new round yet.
+      playerOneLastSeen: null, 
+      playerTwoLastSeen: null,
     };
-    if (newCentralPrompt !== undefined) {
+    if (newCentralPrompt !== undefined && newCentralPrompt.trim() !== "") {
       updates.prompt = newCentralPrompt;
+    } else if (game?.prompt) {
+      updates.prompt = game.prompt; // Keep current prompt if no new one provided
+    } else {
+      updates.prompt = defaultGameData.prompt; // Fallback to default if nothing else
     }
     await updateGameData(updates);
     toast({title: "Round Reset", description: "Player submissions cleared, ready for a new round."});
-  }, [updateGameData, toast]);
+  }, [updateGameData, toast, game?.prompt]);
 
   const resetGame = useCallback(async () => {
     const gameDocRef = doc(db, "games", GAME_ID);
     try {
-      const existingCreatedAt = game?.createdAt || serverTimestamp();
-      await setDoc(gameDocRef, { ...defaultGameData, createdAt: existingCreatedAt, updatedAt: serverTimestamp() });
+      const existingCreatedAt = game?.createdAt || serverTimestamp(); // Preserve original creation time
+      // Reset all fields to default, but keep createdAt
+      const gameDataToSet = { ...defaultGameData, createdAt: existingCreatedAt, updatedAt: serverTimestamp()};
+      await setDoc(gameDocRef, gameDataToSet);
+      // setGame(gameDataToSet as Game); // Update local state immediately
       toast({ title: "Game Reset", description: "The entire game has been reset to defaults." });
     } catch (e:any) {
       console.error("Error resetting game:", e);
@@ -162,5 +188,5 @@ export function useGame() {
   }, [toast, game?.createdAt]);
 
 
-  return { game, loading, error, updateGameData, setCentralPrompt, submitPlayerPrompt, updatePlayerTypingPrompt, updateGameStatus, revealImages, resetRound, resetGame };
+  return { game, loading, error, updateGameData, setCentralPrompt, submitPlayerPrompt, updatePlayerTypingPrompt, updateGameStatus, revealImages, resetRound, resetGame, updatePlayerLastSeen };
 }

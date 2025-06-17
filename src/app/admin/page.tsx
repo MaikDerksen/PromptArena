@@ -2,6 +2,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import Image from 'next/image';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
@@ -10,9 +11,10 @@ import { useGame } from '@/hooks/use-game';
 import LoadingSpinner from '@/components/loading-spinner';
 import ImageCard from '@/components/image-card';
 import GameStatusBadge from '@/components/game-status-badge';
-import { AlertCircle, Edit3, Play, RotateCcw, SkipForward, Eye, UserCheck, UserX, Image as ImageIcon } from 'lucide-react';
+import { AlertCircle, Edit3, Play, RotateCcw, SkipForward, Eye, UserCheck, UserX, Image as ImageIcon, CheckCircle, Wifi, HelpCircle } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import type { Timestamp } from 'firebase/firestore';
+import { generateImage } from '@/ai/flows/generate-image'; // Import the flow directly
 
 const formatLastSeen = (lastSeen: Timestamp | Date | null): {text: string, icon: JSX.Element} => {
   if (!lastSeen) return { text: "Never active", icon: <UserX className="text-destructive h-4 w-4" /> };
@@ -25,7 +27,7 @@ const formatLastSeen = (lastSeen: Timestamp | Date | null): {text: string, icon:
   if (diffMins < 2) return { text: "Active just now", icon: <UserCheck className="text-green-500 h-4 w-4" /> };
   if (diffMins < 60) return { text: `Active ${diffMins} min ago`, icon: <UserCheck className="text-yellow-500 h-4 w-4" /> };
   
-  return { text: `Last active: ${seenDate.toLocaleDateString()}`, icon: <UserX className="text-muted-foreground h-4 w-4" /> };
+  return { text: `Last active: ${seenDate.toLocaleDateString()} ${seenDate.toLocaleTimeString()}`, icon: <UserX className="text-muted-foreground h-4 w-4" /> };
 };
 
 
@@ -35,6 +37,10 @@ export default function AdminPage() {
   const [isSubmittingPrompt, setIsSubmittingPrompt] = useState(false);
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
   const [isRevealingImages, setIsRevealingImages] = useState(false);
+
+  const [isTestingApi, setIsTestingApi] = useState(false);
+  const [apiTestResult, setApiTestResult] = useState<{success: boolean, message: string, imageUrl?: string} | null>(null);
+
 
   useEffect(() => {
     if (game?.prompt) {
@@ -78,6 +84,25 @@ export default function AdminPage() {
   const handleResetGame = async () => {
     if (window.confirm("Are you sure you want to reset the entire game? This action cannot be undone.")) {
       await resetGame();
+    }
+  };
+
+  const handleTestApi = async () => {
+    setIsTestingApi(true);
+    setApiTestResult(null);
+    try {
+      const testPrompt = "Test image: a friendly robot waving";
+      const result = await generateImage({ prompt: testPrompt });
+      if (result.imageUrl) {
+        setApiTestResult({ success: true, message: "API connection successful! Image generated.", imageUrl: result.imageUrl });
+      } else {
+        setApiTestResult({ success: false, message: "API call succeeded but no image URL was returned." });
+      }
+    } catch (err: any) {
+      console.error("API Test Error:", err);
+      setApiTestResult({ success: false, message: `API Test Failed: ${err.message || 'Unknown error'}` });
+    } finally {
+      setIsTestingApi(false);
     }
   };
 
@@ -133,8 +158,8 @@ export default function AdminPage() {
       
       <Card>
         <CardHeader>
-          <CardTitle>Player Activity</CardTitle>
-          <CardDescription>Monitor player connection and recent activity.</CardDescription>
+          <CardTitle className="flex items-center gap-2"><Wifi className="text-primary"/> Player Activity</CardTitle>
+          <CardDescription>Monitor player connection and recent activity. Updates when players load their page or type.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-2">
           <div className="flex items-center gap-2 p-2 bg-muted rounded-md">
@@ -147,6 +172,32 @@ export default function AdminPage() {
             <span className="font-medium">Player Two:</span>
             <span>{playerTwoActivity.text}</span>
           </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2"><HelpCircle className="text-primary"/> API & System Health</CardTitle>
+          <CardDescription>Test the connection to the image generation API.</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <Button onClick={handleTestApi} disabled={isTestingApi}>
+            {isTestingApi ? <><LoadingSpinner className="mr-2"/>Testing API...</> : 'Test Image Generation API'}
+          </Button>
+          {isTestingApi && <p className="text-sm text-muted-foreground">Sending request to image generation service...</p>}
+          {apiTestResult && (
+            <Alert variant={apiTestResult.success ? "default" : "destructive"} className={apiTestResult.success ? "bg-green-500/10 border-green-500/50" : ""}>
+              {apiTestResult.success ? <CheckCircle className="h-4 w-4" /> : <AlertCircle className="h-4 w-4" />}
+              <AlertTitle>{apiTestResult.success ? "API Test Successful" : "API Test Failed"}</AlertTitle>
+              <AlertDescription>{apiTestResult.message}</AlertDescription>
+              {apiTestResult.imageUrl && (
+                <div className="mt-4">
+                  <p className="text-sm font-medium mb-2">Test Image:</p>
+                  <Image src={apiTestResult.imageUrl} alt="API Test Image" width={200} height={200} className="rounded-md border" data-ai-hint="test abstract" />
+                </div>
+              )}
+            </Alert>
+          )}
         </CardContent>
       </Card>
 
@@ -190,7 +241,7 @@ export default function AdminPage() {
             playerName="Player One"
             finalPrompt={game.playerOnePrompt}
             imageUrl={game.playerOneImage}
-            isLiveTypingView={false}
+            isLiveTypingView={false} // Admin sees final prompts
             imagesRevealed={true} // Admin always sees images
             isGenerating={game.status === 'active' && !!game.playerOnePrompt && !game.playerOneImage}
           />
@@ -198,7 +249,7 @@ export default function AdminPage() {
             playerName="Player Two"
             finalPrompt={game.playerTwoPrompt}
             imageUrl={game.playerTwoImage}
-            isLiveTypingView={false}
+            isLiveTypingView={false} // Admin sees final prompts
             imagesRevealed={true} // Admin always sees images
             isGenerating={game.status === 'active' && !!game.playerTwoPrompt && !game.playerTwoImage}
           />

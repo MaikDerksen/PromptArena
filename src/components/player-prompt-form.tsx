@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
@@ -19,7 +20,7 @@ interface PlayerPromptFormProps {
 }
 
 export default function PlayerPromptForm({ playerKey, playerName }: PlayerPromptFormProps) {
-  const { game, submitPlayerPrompt, updatePlayerTypingPrompt, loading: gameLoading } = useGame();
+  const { game, submitPlayerPrompt, updatePlayerTypingPrompt, updatePlayerLastSeen, loading: gameLoading } = useGame();
   const [promptInput, setPromptInput] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -27,25 +28,23 @@ export default function PlayerPromptForm({ playerKey, playerName }: PlayerPrompt
   const finalSubmittedPrompt = playerKey === 'playerOne' ? game?.playerOnePrompt : game?.playerTwoPrompt;
   const currentImage = playerKey === 'playerOne' ? game?.playerOneImage : game?.playerTwoImage;
 
+  // Effect to update lastSeen when component mounts
+  useEffect(() => {
+    updatePlayerLastSeen(playerKey);
+  }, [playerKey, updatePlayerLastSeen]);
+
+
   // Debounced function to update typing prompt in Firestore
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const debouncedUpdateTypingPrompt = useCallback(
     debounce((player: PlayerKey, pInput: string) => {
       if (game?.status === 'active') { // Only update if round is active
-        updatePlayerTypingPrompt(player, pInput);
+        updatePlayerTypingPrompt(player, pInput); // This also updates lastSeen
       }
-    }, 500), // Update every 500ms
+    }, 500), 
     [updatePlayerTypingPrompt, game?.status] 
   );
 
-  useEffect(() => {
-    // If game data loads and there's an existing *final* prompt for this player,
-    // you might want to pre-fill, but be careful not to overwrite active typing.
-    // Let's pre-fill only if the input is empty and there's a final prompt (e.g. page refresh after submission)
-    if (finalSubmittedPrompt && promptInput === '') {
-      // setPromptInput(finalSubmittedPrompt); // User might prefer to start fresh
-    }
-  }, [finalSubmittedPrompt, promptInput]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const newPrompt = e.target.value;
@@ -67,9 +66,8 @@ export default function PlayerPromptForm({ playerKey, playerName }: PlayerPrompt
     setIsSubmitting(true);
     try {
       await submitPlayerPrompt(playerKey, promptInput);
-      // setPromptInput(''); // Optionally clear input after submission - keeping it for now
-    } catch (err: any) {
-      setError(err.message || "Failed to submit prompt or generate image.");
+      // Optionally clear input: setPromptInput(''); // Keeping it for now so player sees what they submitted
+    } catch (err: any) {      setError(err.message || "Failed to submit prompt or generate image.");
     } finally {
       setIsSubmitting(false);
     }
@@ -84,14 +82,15 @@ export default function PlayerPromptForm({ playerKey, playerName }: PlayerPrompt
   }
   
   const isRoundActive = game.status === 'active';
+  const hasPlayerSubmitted = !!(playerKey === 'playerOne' ? game.playerOnePrompt : game.playerTwoPrompt);
 
   return (
     <div className="space-y-8">
       <Card className="shadow-xl">
         <CardHeader>
           <CardTitle className="font-headline text-3xl">{playerName}'s Turn</CardTitle>
-          <CardDescription>The current central prompt is: <strong className="text-primary">{game.prompt}</strong></CardDescription>
-          {!isRoundActive && game.status !== 'completed' && (
+          <CardDescription>The current central prompt is: <strong className="text-primary">{game.prompt || "Waiting for admin..."}</strong></CardDescription>
+          {!isRoundActive && game.status === 'waiting' && (
             <Alert variant="default" className="mt-2 bg-secondary">
               <AlertCircle className="h-4 w-4" />
               <AlertTitle>Round Not Active</AlertTitle>
@@ -109,6 +108,15 @@ export default function PlayerPromptForm({ playerKey, playerName }: PlayerPrompt
               </AlertDescription>
             </Alert>
           )}
+           {isRoundActive && hasPlayerSubmitted && !currentImage && !isSubmitting && (
+             <Alert variant="default" className="mt-2 bg-blue-500/10 border-blue-500/50">
+                <AlertCircle className="h-4 w-4 text-blue-500" />
+                <AlertTitle>Prompt Submitted!</AlertTitle>
+                <AlertDescription>
+                Your prompt has been submitted. Waiting for the image to generate. You can edit and resubmit if needed before the image appears.
+                </AlertDescription>
+            </Alert>
+           )}
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-6">
@@ -141,11 +149,13 @@ export default function PlayerPromptForm({ playerKey, playerName }: PlayerPrompt
       </Card>
 
       <ImageCard
-        playerName="Your Submission"
-        finalPrompt={finalSubmittedPrompt}
+        playerName="Your Submission Preview"
+        finalPrompt={finalSubmittedPrompt} // Show the submitted prompt
+        typingPrompt={promptInput} // Show current input as typing prompt for immediate feedback
         imageUrl={currentImage}
-        isGenerating={isSubmitting && !currentImage}
+        isGenerating={isSubmitting || (hasPlayerSubmitted && !currentImage)} // Generating if submitting OR submitted but no image yet
         cardClassName="bg-card/50"
+        imagesRevealed={true} // Player always sees their own image attempts
         isLiveTypingView={false} 
       />
     </div>

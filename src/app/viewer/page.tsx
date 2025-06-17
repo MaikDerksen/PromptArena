@@ -49,7 +49,7 @@ export default function ViewerPage() {
         </CardContent>
       </Card>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
         <ImageCard
           playerName="Player One"
           finalPrompt={game.playerOnePrompt}
@@ -60,15 +60,6 @@ export default function ViewerPage() {
           isLiveTypingView={true}
           isGenerating={game.status === 'active' && !!game.playerOnePrompt && !game.playerOneImage}
         />
-
-        <Card className="hidden lg:block lg:col-span-1 sticky top-24 self-start bg-transparent border-0 shadow-none">
-          <CardContent className="text-center p-4">
-             <p className="text-sm text-muted-foreground">
-                {game.status === 'active' && !game.imagesRevealed && (!!game.playerOneImage || !!game.playerTwoImage) ? "Waiting for Admin to reveal images..." : "The battle unfolds!"}
-             </p>
-             <p className="text-xs text-muted-foreground mt-1">Prompts and images update live.</p>
-          </CardContent>
-        </Card>
 
         <ImageCard
           playerName="Player Two"

@@ -3,24 +3,28 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Rules for the 'games' collection
+    // Game document: /games/default-game
     match /games/{gameId} {
-      // Allow anyone to read the 'default-game' document.
-      // This is needed for the viewer and player pages.
-      allow read: if gameId == 'default-game';
+      // Allow read access for everyone (players, viewers, admin)
+      allow read: if true;
 
-      // Allow anyone to create the 'default-game' document.
-      // This is used by the useGame hook for initial setup if the document doesn't exist.
-      allow create: if gameId == 'default-game';
+      // Allow creation of the game document if it doesn't exist
+      // This is typically handled by the application on first load if the game doesn't exist.
+      allow create: if request.resource.data.id == 'default-game';
 
-      // Allow anyone to update the 'default-game' document.
-      // This allows admin to change prompts/status and players to submit their prompts/images.
-      // For production, you would want to add authentication and more granular field-level validation.
-      allow update: if gameId == 'default-game';
+      // Allow updates to the game document
+      // This covers admin setting prompts/status, and players submitting their prompts/images.
+      // For production, this should be more granular (e.g., only admin can update `prompt` and `status`,
+      // players can only update their respective fields if authenticated and game is 'active').
+      allow update: if resource.data.id == 'default-game';
 
-      // Deleting the game document is not allowed by these rules.
+      // Disallow deletion of the game document
       allow delete: if false;
     }
-    // All other paths/collections are implicitly denied as no 'allow' rule matches.
+
+    // Deny all other writes/reads by default if not explicitly allowed
+    match /{document=**} {
+      allow read, write: if false;
+    }
   }
 }

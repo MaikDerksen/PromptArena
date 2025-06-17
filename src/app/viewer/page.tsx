@@ -49,7 +49,8 @@ export default function ViewerPage() {
         </CardContent>
       </Card>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
+      {/* Removed items-start from grid to allow cards to stretch to equal height */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <ImageCard
           playerName="Player One"
           finalPrompt={game.playerOnePrompt}
@@ -75,3 +76,4 @@ export default function ViewerPage() {
     </div>
   );
 }
+

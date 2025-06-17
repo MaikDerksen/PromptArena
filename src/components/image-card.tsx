@@ -3,6 +3,7 @@ import Image from 'next/image';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import LoadingSpinner from './loading-spinner';
 import { ImageOff, EyeOff } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
 interface ImageCardProps {
   playerName?: string;
@@ -49,7 +50,6 @@ export default function ImageCard({
     }
   }
   
-  // If actively generating from a submitted prompt, ensure the submitted prompt is shown
   if (isGenerating && finalPrompt && !imageUrl) {
      displayPromptText = finalPrompt; 
      if (!isLiveTypingView) displayPromptLabel = "Submitted Prompt (Generating):";
@@ -57,21 +57,28 @@ export default function ImageCard({
 
 
   return (
-    <Card className={cardClassName}>
+    <Card className={cn(cardClassName, "flex flex-col")}> {/* Card is flex col, allows it to stretch vertically */}
       {playerName && (
-        <CardHeader>
+        <CardHeader className="flex-shrink-0"> {/* Header does not grow/shrink */}
           <CardTitle className="font-headline">{playerName}</CardTitle>
         </CardHeader>
       )}
-      <CardContent className="space-y-4">
-        <div>
-          <CardDescription className="mb-1 text-sm">{displayPromptLabel}</CardDescription>
-          <p className="text-base min-h-[60px] p-2 bg-muted rounded-md break-words">
+      {/* CardContent takes up remaining vertical space and is a flex column */}
+      <CardContent className="flex flex-col flex-grow p-6"> 
+        
+        {/* Prompt Section - this container will grow vertically */}
+        <div className="flex flex-col flex-grow mb-4"> 
+          <CardDescription className="mb-1 text-sm flex-shrink-0">{displayPromptLabel}</CardDescription>
+          <p 
+            className="text-base p-2 bg-muted rounded-md w-full flex-grow min-h-[60px] overflow-y-auto" // p tag grows, has min height, and scrolls if content overflows
+            style={{ overflowWrap: 'break-word', wordBreak: 'break-word' }} // Ensures long words without spaces also wrap
+          >
             {displayPromptText}
           </p>
         </div>
         
-        <div className="aspect-square w-full bg-muted rounded-md flex items-center justify-center overflow-hidden relative">
+        {/* Image Section - fixed aspect ratio, does not grow/shrink, pushed to bottom by prompt section's growth */}
+        <div className="aspect-square w-full bg-muted rounded-md flex items-center justify-center overflow-hidden relative flex-shrink-0">
           {isGenerating && (
             <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/50 z-10">
               <LoadingSpinner className="w-12 h-12 text-primary" />

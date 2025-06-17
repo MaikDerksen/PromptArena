@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -9,7 +10,7 @@ import { useGame } from '@/hooks/use-game';
 import LoadingSpinner from '@/components/loading-spinner';
 import ImageCard from '@/components/image-card';
 import GameStatusBadge from '@/components/game-status-badge';
-import { AlertCircle, Edit3, Play, RotateCcw, SkipForward, Eye, UserCheck, UserX } from 'lucide-react';
+import { AlertCircle, Edit3, Play, RotateCcw, SkipForward, Eye, UserCheck, UserX, Image as ImageIcon } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import type { Timestamp } from 'firebase/firestore';
 
@@ -17,7 +18,7 @@ const formatLastSeen = (lastSeen: Timestamp | Date | null): {text: string, icon:
   if (!lastSeen) return { text: "Never active", icon: <UserX className="text-destructive h-4 w-4" /> };
   
   const now = new Date();
-  const seenDate = lastSeen instanceof Timestamp ? lastSeen.toDate() : new Date(lastSeen); // Handle both Timestamp and Date
+  const seenDate = lastSeen instanceof Timestamp ? lastSeen.toDate() : new Date(lastSeen);
   const diffMs = now.getTime() - seenDate.getTime();
   const diffMins = Math.round(diffMs / (1000 * 60));
 
@@ -29,11 +30,11 @@ const formatLastSeen = (lastSeen: Timestamp | Date | null): {text: string, icon:
 
 
 export default function AdminPage() {
-  const { game, loading, error: gameError, setCentralPrompt, updateGameStatus, revealPrompts, resetRound, resetGame } = useGame();
+  const { game, loading, error: gameError, setCentralPrompt, updateGameStatus, revealImages, resetRound, resetGame } = useGame();
   const [newPrompt, setNewPrompt] = useState('');
   const [isSubmittingPrompt, setIsSubmittingPrompt] = useState(false);
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
-  const [isRevealing, setIsRevealing] = useState(false);
+  const [isRevealingImages, setIsRevealingImages] = useState(false);
 
   useEffect(() => {
     if (game?.prompt) {
@@ -61,12 +62,12 @@ export default function AdminPage() {
     }
   };
   
-  const handleRevealPrompts = async () => {
-    setIsRevealing(true);
+  const handleRevealImages = async () => {
+    setIsRevealingImages(true);
     try {
-      await revealPrompts();
+      await revealImages();
     } finally {
-      setIsRevealing(false);
+      setIsRevealingImages(false);
     }
   };
 
@@ -90,6 +91,7 @@ export default function AdminPage() {
   
   const playerOneActivity = formatLastSeen(game.playerOneLastSeen || null);
   const playerTwoActivity = formatLastSeen(game.playerTwoLastSeen || null);
+  const canRevealImages = (!!game.playerOneImage || !!game.playerTwoImage) && !game.imagesRevealed && (game.status === 'active' || game.status === 'completed');
 
   return (
     <div className="space-y-8">
@@ -163,8 +165,8 @@ export default function AdminPage() {
           <Button onClick={() => handleUpdateStatus('completed')} disabled={isUpdatingStatus || game.status === 'completed'} className="w-full">
             End Round (Completed)
           </Button>
-          <Button onClick={handleRevealPrompts} disabled={isRevealing || game.promptsRevealed || (game.status !== 'active' && game.status !== 'completed')} className="w-full">
-            {isRevealing ? <><LoadingSpinner className="mr-2"/>Revealing...</> : <><Eye className="mr-2 h-4 w-4"/> Reveal Prompts to Viewers</>}
+          <Button onClick={handleRevealImages} disabled={isRevealingImages || !canRevealImages} className="w-full">
+            {isRevealingImages ? <><LoadingSpinner className="mr-2"/>Revealing...</> : <><ImageIcon className="mr-2 h-4 w-4"/> Reveal Images to Viewers</>}
           </Button>
           <Button onClick={handleResetRound} variant="outline" disabled={isUpdatingStatus} className="w-full">
            <SkipForward className="mr-2 h-4 w-4"/> Next Round (Clear Submissions)
@@ -174,7 +176,7 @@ export default function AdminPage() {
           </Button>
         </CardContent>
          <CardFooter>
-          <p className="text-xs text-muted-foreground">"Next Round" clears submissions, hides prompts, sets status to 'waiting'. "Reset Game" clears all data.</p>
+          <p className="text-xs text-muted-foreground">"Next Round" clears submissions, hides images, sets status to 'waiting'. "Reset Game" clears all data.</p>
         </CardFooter>
       </Card>
 
@@ -188,14 +190,16 @@ export default function AdminPage() {
             playerName="Player One"
             finalPrompt={game.playerOnePrompt}
             imageUrl={game.playerOneImage}
-            isLiveTypingView={false} // Admin sees final submitted prompt
+            isLiveTypingView={false}
+            imagesRevealed={true} // Admin always sees images
             isGenerating={game.status === 'active' && !!game.playerOnePrompt && !game.playerOneImage}
           />
           <ImageCard
             playerName="Player Two"
             finalPrompt={game.playerTwoPrompt}
             imageUrl={game.playerTwoImage}
-            isLiveTypingView={false} // Admin sees final submitted prompt
+            isLiveTypingView={false}
+            imagesRevealed={true} // Admin always sees images
             isGenerating={game.status === 'active' && !!game.playerTwoPrompt && !game.playerTwoImage}
           />
         </CardContent>

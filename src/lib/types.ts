@@ -1,3 +1,4 @@
+
 import type { Timestamp } from 'firebase/firestore';
 
 export type GameStatus = "waiting" | "active" | "completed";
@@ -13,12 +14,11 @@ export interface Game {
   createdAt: Timestamp | Date | null;
   updatedAt?: Timestamp | Date | null;
   
-  // New fields for live typing and activity
   playerOneTypingPrompt?: string;
   playerTwoTypingPrompt?: string;
   playerOneLastSeen?: Timestamp | Date | null;
   playerTwoLastSeen?: Timestamp | Date | null;
-  promptsRevealed?: boolean;
+  imagesRevealed?: boolean; // Changed from promptsRevealed
 }
 
 export type PlayerKey = "playerOne" | "playerTwo";

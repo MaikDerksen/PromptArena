@@ -1,3 +1,4 @@
+
 import { useState, useEffect, useCallback } from 'react';
 import { doc, setDoc, onSnapshot, serverTimestamp, updateDoc, Timestamp } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
@@ -5,7 +6,7 @@ import type { Game, GameStatus, PlayerKey } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
 import { generateImage as genImageFlow } from '@/ai/flows/generate-image';
 
-const GAME_ID = "default-game"; // Using a fixed game ID for simplicity
+const GAME_ID = "default-game"; 
 
 const defaultGameData: Game = {
   id: GAME_ID,
@@ -21,7 +22,7 @@ const defaultGameData: Game = {
   playerTwoTypingPrompt: "",
   playerOneLastSeen: null,
   playerTwoLastSeen: null,
-  promptsRevealed: false,
+  imagesRevealed: false, // Changed from promptsRevealed
 };
 
 export function useGame() {
@@ -61,10 +62,6 @@ export function useGame() {
     const gameDocRef = doc(db, "games", GAME_ID);
     try {
       await updateDoc(gameDocRef, { ...data, updatedAt: serverTimestamp() });
-      // Only toast for major updates, not for every typing change
-      if (!('playerOneTypingPrompt' in data || 'playerTwoTypingPrompt' in data)) {
-        // toast({ title: "Success", description: "Game updated successfully." });
-      }
     } catch (e: any) {
       console.error("Error updating game data:", e);
       toast({ title: "Error", description: "Failed to update game.", variant: "destructive" });
@@ -79,11 +76,22 @@ export function useGame() {
   const updatePlayerTypingPrompt = useCallback(async (player: PlayerKey, typingPrompt: string) => {
     const typingField = player === "playerOne" ? "playerOneTypingPrompt" : "playerTwoTypingPrompt";
     const lastSeenField = player === "playerOne" ? "playerOneLastSeen" : "playerTwoLastSeen";
-    await updateGameData({ 
+    // If player clears input, also clear final prompt if no image is generated yet
+    // This allows re-submission before image generation if they clear the input
+    const finalPromptField = player === "playerOne" ? "playerOnePrompt" : "playerTwoPrompt";
+    const imageField = player === "playerOne" ? "playerOneImage" : "playerTwoImage";
+    
+    const updates: Partial<Game> = {
       [typingField]: typingPrompt,
-      [lastSeenField]: serverTimestamp() 
-    });
-  }, [updateGameData]);
+      [lastSeenField]: serverTimestamp(),
+    };
+
+    if (typingPrompt === "" && game && !game[imageField]) {
+      updates[finalPromptField] = ""; // Allow clearing final prompt if no image yet
+    }
+
+    await updateGameData(updates);
+  }, [updateGameData, game]);
 
   const submitPlayerPrompt = useCallback(async (player: PlayerKey, playerPrompt: string) => {
     const promptField = player === "playerOne" ? "playerOnePrompt" : "playerTwoPrompt";
@@ -91,10 +99,9 @@ export function useGame() {
     const typingField = player === "playerOne" ? "playerOneTypingPrompt" : "playerTwoTypingPrompt";
     const lastSeenField = player === "playerOne" ? "playerOneLastSeen" : "playerTwoLastSeen";
 
-    // Set final prompt and clear typing prompt
     await updateGameData({ 
       [promptField]: playerPrompt,
-      [typingField]: "", // Clear typing prompt on submission
+      [typingField]: "", 
       [lastSeenField]: serverTimestamp()
     });
 
@@ -106,6 +113,8 @@ export function useGame() {
     } catch (e: any) {
       console.error(`Error generating image for ${player}:`, e);
       toast({ title: "Image Generation Failed", description: e.message || "Could not generate image.", variant: "destructive" });
+      // Clear the image field if generation fails so it doesn't show a broken/old one
+      await updateGameData({ [imageField]: "" });
       throw e;
     }
   }, [updateGameData, toast]);
@@ -115,9 +124,9 @@ export function useGame() {
     toast({title: "Game Status Updated", description: `Status set to ${status}.`});
   }, [updateGameData, toast]);
   
-  const revealPrompts = useCallback(async () => {
-    await updateGameData({ promptsRevealed: true });
-    toast({title: "Prompts Revealed", description: "Player prompts are now visible to viewers."});
+  const revealImages = useCallback(async () => { // Renamed from revealPrompts
+    await updateGameData({ imagesRevealed: true });
+    toast({title: "Images Revealed", description: "Player images are now visible to viewers."});
   }, [updateGameData, toast]);
 
   const resetRound = useCallback(async (newCentralPrompt?: string) => {
@@ -130,7 +139,7 @@ export function useGame() {
       playerTwoTypingPrompt: "",
       playerOneLastSeen: null,
       playerTwoLastSeen: null,
-      promptsRevealed: false,
+      imagesRevealed: false, // Changed from promptsRevealed
       status: "waiting",
     };
     if (newCentralPrompt !== undefined) {
@@ -143,7 +152,6 @@ export function useGame() {
   const resetGame = useCallback(async () => {
     const gameDocRef = doc(db, "games", GAME_ID);
     try {
-      // Keep createdAt if it exists, otherwise use serverTimestamp
       const existingCreatedAt = game?.createdAt || serverTimestamp();
       await setDoc(gameDocRef, { ...defaultGameData, createdAt: existingCreatedAt, updatedAt: serverTimestamp() });
       toast({ title: "Game Reset", description: "The entire game has been reset to defaults." });
@@ -154,5 +162,5 @@ export function useGame() {
   }, [toast, game?.createdAt]);
 
 
-  return { game, loading, error, updateGameData, setCentralPrompt, submitPlayerPrompt, updatePlayerTypingPrompt, updateGameStatus, revealPrompts, resetRound, resetGame };
+  return { game, loading, error, updateGameData, setCentralPrompt, submitPlayerPrompt, updatePlayerTypingPrompt, updateGameStatus, revealImages, resetRound, resetGame };
 }

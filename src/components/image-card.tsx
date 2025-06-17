@@ -1,3 +1,4 @@
+
 import Image from 'next/image';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import LoadingSpinner from './loading-spinner';
@@ -5,13 +6,13 @@ import { ImageOff, EyeOff } from 'lucide-react';
 
 interface ImageCardProps {
   playerName?: string;
-  finalPrompt: string | null; // The finalized, submitted prompt
-  typingPrompt?: string | null; // For live typing view
+  finalPrompt: string | null; 
+  typingPrompt?: string | null; 
   imageUrl: string | null;
   isGenerating?: boolean;
   cardClassName?: string;
-  promptsRevealed?: boolean; // Is the admin allowing prompts to be seen by viewers?
-  isLiveTypingView?: boolean; // True if this card is on the viewer page
+  imagesRevealed: boolean; 
+  isLiveTypingView?: boolean; 
 }
 
 export default function ImageCard({ 
@@ -21,27 +22,25 @@ export default function ImageCard({
   imageUrl, 
   isGenerating, 
   cardClassName,
-  promptsRevealed,
+  imagesRevealed,
   isLiveTypingView 
 }: ImageCardProps) {
 
   let displayPromptText = "No prompt information available.";
   let displayPromptLabel = "Prompt Status:";
 
-  if (isLiveTypingView) {
-    if (promptsRevealed) {
-      displayPromptLabel = "Revealed Prompt:";
-      displayPromptText = finalPrompt || "No prompt submitted or revealed yet.";
+  if (isLiveTypingView) { // For Viewer page
+    if (typingPrompt) {
+      displayPromptLabel = `${playerName || 'Player'} is typing:`;
+      displayPromptText = typingPrompt;
+    } else if (finalPrompt) {
+      displayPromptLabel = "Submitted Prompt:";
+      displayPromptText = finalPrompt;
     } else {
-      if (typingPrompt) {
-        displayPromptLabel = `${playerName || 'Player'} is typing:`;
-        displayPromptText = typingPrompt;
-      } else {
-        displayPromptLabel = "Prompt Status:";
-        displayPromptText = "Prompt is currently hidden by admin. Waiting for player to type or admin to reveal.";
-      }
+      displayPromptLabel = "Prompt Status:";
+      displayPromptText = "Waiting for player to type or submit...";
     }
-  } else { // For player's own submission view or admin's view of final submissions
+  } else { // For player's own submission view or admin's view
     displayPromptLabel = "Submitted Prompt:";
     if (isGenerating && !finalPrompt) {
       displayPromptText = "Generating based on your input...";
@@ -50,8 +49,10 @@ export default function ImageCard({
     }
   }
   
-  if (isGenerating && finalPrompt && !imageUrl) { // If generating from a submitted prompt
-     displayPromptText = finalPrompt; // Show the prompt that's being used for generation
+  // If actively generating from a submitted prompt, ensure the submitted prompt is shown
+  if (isGenerating && finalPrompt && !imageUrl) {
+     displayPromptText = finalPrompt; 
+     if (!isLiveTypingView) displayPromptLabel = "Submitted Prompt (Generating):";
   }
 
 
@@ -77,7 +78,8 @@ export default function ImageCard({
               <p className="mt-2 text-sm text-primary-foreground">Generating Image...</p>
             </div>
           )}
-          {imageUrl && !isGenerating ? (
+
+          {imageUrl && !isGenerating && (isLiveTypingView ? imagesRevealed : true) ? (
             <Image
               src={imageUrl}
               alt={finalPrompt || typingPrompt || 'Generated image'}
@@ -86,10 +88,10 @@ export default function ImageCard({
               data-ai-hint="abstract digital"
               className="transition-opacity duration-500 ease-in-out opacity-100 hover:opacity-80"
             />
-          ) : !isGenerating && isLiveTypingView && !promptsRevealed && !typingPrompt ? (
+          ) : imageUrl && !isGenerating && isLiveTypingView && !imagesRevealed ? (
             <div className="flex flex-col items-center justify-center text-muted-foreground">
               <EyeOff className="w-16 h-16 mb-2" />
-              <p>Image Hidden Until Reveal</p>
+              <p>Image Hidden Until Admin Reveal</p>
             </div>
           ) : !isGenerating && (
              <div className="flex flex-col items-center justify-center text-muted-foreground">

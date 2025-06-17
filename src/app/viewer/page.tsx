@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useGame } from '@/hooks/use-game';
@@ -42,8 +43,8 @@ export default function ViewerPage() {
           <h2 className="text-3xl font-bold font-headline text-primary break-words">
             {game.prompt || "Waiting for admin to set a prompt..."}
           </h2>
-           {game.status === 'active' && !game.promptsRevealed && (
-            <p className="text-sm text-accent mt-2 animate-pulse">Players are drafting... Prompts will be shown after admin reveal!</p>
+           {game.status === 'active' && !game.imagesRevealed && (!!game.playerOneImage || !!game.playerTwoImage) && (
+            <p className="text-sm text-accent mt-2 animate-pulse">Images are generated... Waiting for Admin to reveal them!</p>
           )}
         </CardContent>
       </Card>
@@ -55,7 +56,7 @@ export default function ViewerPage() {
           typingPrompt={game.playerOneTypingPrompt}
           imageUrl={game.playerOneImage}
           cardClassName="lg:col-span-1 shadow-lg"
-          promptsRevealed={game.promptsRevealed}
+          imagesRevealed={!!game.imagesRevealed}
           isLiveTypingView={true}
           isGenerating={game.status === 'active' && !!game.playerOnePrompt && !game.playerOneImage}
         />
@@ -63,7 +64,7 @@ export default function ViewerPage() {
         <Card className="hidden lg:block lg:col-span-1 sticky top-24 self-start bg-transparent border-0 shadow-none">
           <CardContent className="text-center p-4">
              <p className="text-sm text-muted-foreground mt-4">
-                {game.status === 'active' && !game.promptsRevealed ? "Waiting for Admin to reveal prompts..." : "The battle unfolds!"}
+                {game.status === 'active' && !game.imagesRevealed && (!!game.playerOneImage || !!game.playerTwoImage) ? "Waiting for Admin to reveal images..." : "The battle unfolds!"}
              </p>
              <p className="text-xs text-muted-foreground mt-2">Prompts and images update live.</p>
           </CardContent>
@@ -75,7 +76,7 @@ export default function ViewerPage() {
           typingPrompt={game.playerTwoTypingPrompt}
           imageUrl={game.playerTwoImage}
           cardClassName="lg:col-span-1 shadow-lg"
-          promptsRevealed={game.promptsRevealed}
+          imagesRevealed={!!game.imagesRevealed}
           isLiveTypingView={true}
           isGenerating={game.status === 'active' && !!game.playerTwoPrompt && !game.playerTwoImage}
         />

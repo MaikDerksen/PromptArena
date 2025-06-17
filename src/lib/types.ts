@@ -12,6 +12,13 @@ export interface Game {
   status: GameStatus;
   createdAt: Timestamp | Date | null;
   updatedAt?: Timestamp | Date | null;
+  
+  // New fields for live typing and activity
+  playerOneTypingPrompt?: string;
+  playerTwoTypingPrompt?: string;
+  playerOneLastSeen?: Timestamp | Date | null;
+  playerTwoLastSeen?: Timestamp | Date | null;
+  promptsRevealed?: boolean;
 }
 
 export type PlayerKey = "playerOne" | "playerTwo";

@@ -42,34 +42,42 @@ export default function ViewerPage() {
           <h2 className="text-3xl font-bold font-headline text-primary break-words">
             {game.prompt || "Waiting for admin to set a prompt..."}
           </h2>
+           {game.status === 'active' && !game.promptsRevealed && (
+            <p className="text-sm text-accent mt-2 animate-pulse">Players are drafting... Prompts will be shown after admin reveal!</p>
+          )}
         </CardContent>
       </Card>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
-        {/* Player One Card - takes full width on mobile/tablet, first column on desktop */}
         <ImageCard
           playerName="Player One"
-          prompt={game.playerOnePrompt}
+          finalPrompt={game.playerOnePrompt}
+          typingPrompt={game.playerOneTypingPrompt}
           imageUrl={game.playerOneImage}
           cardClassName="lg:col-span-1 shadow-lg"
+          promptsRevealed={game.promptsRevealed}
+          isLiveTypingView={true}
+          isGenerating={game.status === 'active' && !!game.playerOnePrompt && !game.playerOneImage}
         />
 
-        {/* Central Prompt for Desktop - hidden on mobile/tablet, middle column on desktop */}
         <Card className="hidden lg:block lg:col-span-1 sticky top-24 self-start bg-transparent border-0 shadow-none">
           <CardContent className="text-center p-4">
-             {/* This space is intentionally left for visual balance on desktop, main prompt is above */}
-             {/* Or you can re-iterate the prompt here if desired */}
-             <p className="text-sm text-muted-foreground mt-4">The battle rages on!</p>
+             <p className="text-sm text-muted-foreground mt-4">
+                {game.status === 'active' && !game.promptsRevealed ? "Waiting for Admin to reveal prompts..." : "The battle unfolds!"}
+             </p>
              <p className="text-xs text-muted-foreground mt-2">Prompts and images update live.</p>
           </CardContent>
         </Card>
 
-        {/* Player Two Card - takes full width on mobile/tablet, third column on desktop */}
         <ImageCard
           playerName="Player Two"
-          prompt={game.playerTwoPrompt}
+          finalPrompt={game.playerTwoPrompt}
+          typingPrompt={game.playerTwoTypingPrompt}
           imageUrl={game.playerTwoImage}
           cardClassName="lg:col-span-1 shadow-lg"
+          promptsRevealed={game.promptsRevealed}
+          isLiveTypingView={true}
+          isGenerating={game.status === 'active' && !!game.playerTwoPrompt && !game.playerTwoImage}
         />
       </div>
     </div>

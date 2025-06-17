@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { doc, getDoc, setDoc, onSnapshot, Timestamp, serverTimestamp, updateDoc, DocumentData } from 'firebase/firestore';
+import { doc, setDoc, onSnapshot, serverTimestamp, updateDoc, Timestamp } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import type { Game, GameStatus, PlayerKey } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
@@ -17,6 +17,11 @@ const defaultGameData: Game = {
   status: "waiting",
   createdAt: null,
   updatedAt: null,
+  playerOneTypingPrompt: "",
+  playerTwoTypingPrompt: "",
+  playerOneLastSeen: null,
+  playerTwoLastSeen: null,
+  promptsRevealed: false,
 };
 
 export function useGame() {
@@ -33,11 +38,8 @@ export function useGame() {
       if (docSnap.exists()) {
         setGame({ id: docSnap.id, ...docSnap.data() } as Game);
       } else {
-        // Initialize game if it doesn't exist
         try {
           await setDoc(gameDocRef, { ...defaultGameData, createdAt: serverTimestamp(), updatedAt: serverTimestamp() });
-          // The snapshot listener will pick up the new doc, or we can set it directly
-          // setGame(defaultGameData); // This might cause a flicker if snapshot is fast
         } catch (e: any) {
           console.error("Error initializing game:", e);
           setError("Failed to initialize game data.");
@@ -59,11 +61,14 @@ export function useGame() {
     const gameDocRef = doc(db, "games", GAME_ID);
     try {
       await updateDoc(gameDocRef, { ...data, updatedAt: serverTimestamp() });
-      toast({ title: "Success", description: "Game updated successfully." });
+      // Only toast for major updates, not for every typing change
+      if (!('playerOneTypingPrompt' in data || 'playerTwoTypingPrompt' in data)) {
+        // toast({ title: "Success", description: "Game updated successfully." });
+      }
     } catch (e: any) {
       console.error("Error updating game data:", e);
       toast({ title: "Error", description: "Failed to update game.", variant: "destructive" });
-      throw e; // Re-throw to allow specific error handling in components
+      throw e; 
     }
   }, [toast]);
 
@@ -71,28 +76,49 @@ export function useGame() {
     await updateGameData({ prompt });
   }, [updateGameData]);
 
+  const updatePlayerTypingPrompt = useCallback(async (player: PlayerKey, typingPrompt: string) => {
+    const typingField = player === "playerOne" ? "playerOneTypingPrompt" : "playerTwoTypingPrompt";
+    const lastSeenField = player === "playerOne" ? "playerOneLastSeen" : "playerTwoLastSeen";
+    await updateGameData({ 
+      [typingField]: typingPrompt,
+      [lastSeenField]: serverTimestamp() 
+    });
+  }, [updateGameData]);
+
   const submitPlayerPrompt = useCallback(async (player: PlayerKey, playerPrompt: string) => {
     const promptField = player === "playerOne" ? "playerOnePrompt" : "playerTwoPrompt";
     const imageField = player === "playerOne" ? "playerOneImage" : "playerTwoImage";
+    const typingField = player === "playerOne" ? "playerOneTypingPrompt" : "playerTwoTypingPrompt";
+    const lastSeenField = player === "playerOne" ? "playerOneLastSeen" : "playerTwoLastSeen";
 
-    await updateGameData({ [promptField]: playerPrompt });
+    // Set final prompt and clear typing prompt
+    await updateGameData({ 
+      [promptField]: playerPrompt,
+      [typingField]: "", // Clear typing prompt on submission
+      [lastSeenField]: serverTimestamp()
+    });
 
     try {
       const { imageUrl } = await genImageFlow({ prompt: playerPrompt });
       await updateGameData({ [imageField]: imageUrl });
+      toast({ title: "Submission Successful", description: `${player === "playerOne" ? "Player One's" : "Player Two's"} image generated.` });
       return imageUrl;
     } catch (e: any) {
       console.error(`Error generating image for ${player}:`, e);
       toast({ title: "Image Generation Failed", description: e.message || "Could not generate image.", variant: "destructive" });
-      // Clear the prompt if image generation fails? Or leave it to show the attempt?
-      // For now, leave it.
       throw e;
     }
   }, [updateGameData, toast]);
   
   const updateGameStatus = useCallback(async (status: GameStatus) => {
     await updateGameData({ status });
-  }, [updateGameData]);
+    toast({title: "Game Status Updated", description: `Status set to ${status}.`});
+  }, [updateGameData, toast]);
+  
+  const revealPrompts = useCallback(async () => {
+    await updateGameData({ promptsRevealed: true });
+    toast({title: "Prompts Revealed", description: "Player prompts are now visible to viewers."});
+  }, [updateGameData, toast]);
 
   const resetRound = useCallback(async (newCentralPrompt?: string) => {
     const updates: Partial<Game> = {
@@ -100,21 +126,27 @@ export function useGame() {
       playerOneImage: "",
       playerTwoPrompt: "",
       playerTwoImage: "",
+      playerOneTypingPrompt: "",
+      playerTwoTypingPrompt: "",
+      playerOneLastSeen: null,
+      playerTwoLastSeen: null,
+      promptsRevealed: false,
       status: "waiting",
     };
     if (newCentralPrompt !== undefined) {
       updates.prompt = newCentralPrompt;
     }
     await updateGameData(updates);
-  }, [updateGameData]);
+    toast({title: "Round Reset", description: "Player submissions cleared, ready for a new round."});
+  }, [updateGameData, toast]);
 
   const resetGame = useCallback(async () => {
-    // This will reset to default structure but keep createdAt.
-    // Or we can delete and re-initialize, but update is simpler.
     const gameDocRef = doc(db, "games", GAME_ID);
     try {
-      await setDoc(gameDocRef, { ...defaultGameData, createdAt: game?.createdAt || serverTimestamp(), updatedAt: serverTimestamp() });
-      toast({ title: "Game Reset", description: "The game has been reset." });
+      // Keep createdAt if it exists, otherwise use serverTimestamp
+      const existingCreatedAt = game?.createdAt || serverTimestamp();
+      await setDoc(gameDocRef, { ...defaultGameData, createdAt: existingCreatedAt, updatedAt: serverTimestamp() });
+      toast({ title: "Game Reset", description: "The entire game has been reset to defaults." });
     } catch (e:any) {
       console.error("Error resetting game:", e);
       toast({ title: "Error", description: "Failed to reset game.", variant: "destructive" });
@@ -122,5 +154,5 @@ export function useGame() {
   }, [toast, game?.createdAt]);
 
 
-  return { game, loading, error, updateGameData, setCentralPrompt, submitPlayerPrompt, updateGameStatus, resetRound, resetGame };
+  return { game, loading, error, updateGameData, setCentralPrompt, submitPlayerPrompt, updatePlayerTypingPrompt, updateGameStatus, revealPrompts, resetRound, resetGame };
 }

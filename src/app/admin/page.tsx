@@ -2,22 +2,38 @@
 
 import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { useGame } from '@/hooks/use-game';
 import LoadingSpinner from '@/components/loading-spinner';
 import ImageCard from '@/components/image-card';
 import GameStatusBadge from '@/components/game-status-badge';
-import { AlertCircle, Edit3, Play, RotateCcw, SkipForward } from 'lucide-react';
+import { AlertCircle, Edit3, Play, RotateCcw, SkipForward, Eye, UserCheck, UserX } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import type { Timestamp } from 'firebase/firestore';
+
+const formatLastSeen = (lastSeen: Timestamp | Date | null): {text: string, icon: JSX.Element} => {
+  if (!lastSeen) return { text: "Never active", icon: <UserX className="text-destructive h-4 w-4" /> };
+  
+  const now = new Date();
+  const seenDate = lastSeen instanceof Timestamp ? lastSeen.toDate() : new Date(lastSeen); // Handle both Timestamp and Date
+  const diffMs = now.getTime() - seenDate.getTime();
+  const diffMins = Math.round(diffMs / (1000 * 60));
+
+  if (diffMins < 2) return { text: "Active just now", icon: <UserCheck className="text-green-500 h-4 w-4" /> };
+  if (diffMins < 60) return { text: `Active ${diffMins} min ago`, icon: <UserCheck className="text-yellow-500 h-4 w-4" /> };
+  
+  return { text: `Last active: ${seenDate.toLocaleDateString()}`, icon: <UserX className="text-muted-foreground h-4 w-4" /> };
+};
+
 
 export default function AdminPage() {
-  const { game, loading, error: gameError, setCentralPrompt, updateGameStatus, resetRound, resetGame } = useGame();
+  const { game, loading, error: gameError, setCentralPrompt, updateGameStatus, revealPrompts, resetRound, resetGame } = useGame();
   const [newPrompt, setNewPrompt] = useState('');
   const [isSubmittingPrompt, setIsSubmittingPrompt] = useState(false);
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
+  const [isRevealing, setIsRevealing] = useState(false);
 
   useEffect(() => {
     if (game?.prompt) {
@@ -44,9 +60,17 @@ export default function AdminPage() {
       setIsUpdatingStatus(false);
     }
   };
+  
+  const handleRevealPrompts = async () => {
+    setIsRevealing(true);
+    try {
+      await revealPrompts();
+    } finally {
+      setIsRevealing(false);
+    }
+  };
 
   const handleResetRound = async () => {
-    // Optionally, you could allow setting a new prompt directly with resetRound
     await resetRound(game?.prompt || "New round, new prompt!"); 
   };
   
@@ -56,7 +80,6 @@ export default function AdminPage() {
     }
   };
 
-
   if (loading) {
     return <div className="flex justify-center items-center h-64"><LoadingSpinner className="w-12 h-12" /> <span className="ml-2">Loading Admin Panel...</span></div>;
   }
@@ -64,6 +87,9 @@ export default function AdminPage() {
   if (gameError || !game) {
     return <Alert variant="destructive"><AlertCircle className="h-4 w-4" /><AlertTitle>Error</AlertTitle><AlertDescription>Failed to load game data for admin panel. Details: {gameError || "Game data unavailable."}</AlertDescription></Alert>;
   }
+  
+  const playerOneActivity = formatLastSeen(game.playerOneLastSeen || null);
+  const playerTwoActivity = formatLastSeen(game.playerTwoLastSeen || null);
 
   return (
     <div className="space-y-8">
@@ -102,6 +128,25 @@ export default function AdminPage() {
           </form>
         </CardContent>
       </Card>
+      
+      <Card>
+        <CardHeader>
+          <CardTitle>Player Activity</CardTitle>
+          <CardDescription>Monitor player connection and recent activity.</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-2">
+          <div className="flex items-center gap-2 p-2 bg-muted rounded-md">
+            {playerOneActivity.icon}
+            <span className="font-medium">Player One:</span>
+            <span>{playerOneActivity.text}</span>
+          </div>
+          <div className="flex items-center gap-2 p-2 bg-muted rounded-md">
+            {playerTwoActivity.icon}
+            <span className="font-medium">Player Two:</span>
+            <span>{playerTwoActivity.text}</span>
+          </div>
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>
@@ -118,33 +163,40 @@ export default function AdminPage() {
           <Button onClick={() => handleUpdateStatus('completed')} disabled={isUpdatingStatus || game.status === 'completed'} className="w-full">
             End Round (Completed)
           </Button>
-          <Button onClick={handleResetRound} variant="outline" disabled={isUpdatingStatus} className="w-full">
-           <SkipForward className="mr-2 h-4 w-4"/> Next Round (Clear Player Submissions)
+          <Button onClick={handleRevealPrompts} disabled={isRevealing || game.promptsRevealed || (game.status !== 'active' && game.status !== 'completed')} className="w-full">
+            {isRevealing ? <><LoadingSpinner className="mr-2"/>Revealing...</> : <><Eye className="mr-2 h-4 w-4"/> Reveal Prompts to Viewers</>}
           </Button>
-          <Button onClick={handleResetGame} variant="destructive" className="w-full sm:col-span-2 lg:col-span-1">
+          <Button onClick={handleResetRound} variant="outline" disabled={isUpdatingStatus} className="w-full">
+           <SkipForward className="mr-2 h-4 w-4"/> Next Round (Clear Submissions)
+          </Button>
+          <Button onClick={handleResetGame} variant="destructive" className="w-full">
            <RotateCcw className="mr-2 h-4 w-4"/> Reset Entire Game
           </Button>
         </CardContent>
          <CardFooter>
-          <p className="text-xs text-muted-foreground">"Next Round" clears player prompts/images and sets status to 'waiting'. "Reset Entire Game" clears all game data to defaults.</p>
+          <p className="text-xs text-muted-foreground">"Next Round" clears submissions, hides prompts, sets status to 'waiting'. "Reset Game" clears all data.</p>
         </CardFooter>
       </Card>
 
       <Card>
         <CardHeader>
-          <CardTitle>Player Submissions</CardTitle>
-          <CardDescription>View current prompts and generated images from players.</CardDescription>
+          <CardTitle>Player Submissions (Admin View)</CardTitle>
+          <CardDescription>View final prompts and generated images from players. These are always visible to admin.</CardDescription>
         </CardHeader>
         <CardContent className="grid md:grid-cols-2 gap-6">
           <ImageCard
             playerName="Player One"
-            prompt={game.playerOnePrompt}
+            finalPrompt={game.playerOnePrompt}
             imageUrl={game.playerOneImage}
+            isLiveTypingView={false} // Admin sees final submitted prompt
+            isGenerating={game.status === 'active' && !!game.playerOnePrompt && !game.playerOneImage}
           />
           <ImageCard
             playerName="Player Two"
-            prompt={game.playerTwoPrompt}
+            finalPrompt={game.playerTwoPrompt}
             imageUrl={game.playerTwoImage}
+            isLiveTypingView={false} // Admin sees final submitted prompt
+            isGenerating={game.status === 'active' && !!game.playerTwoPrompt && !game.playerTwoImage}
           />
         </CardContent>
       </Card>

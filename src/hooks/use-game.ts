@@ -1,7 +1,8 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { doc, setDoc, onSnapshot, serverTimestamp, updateDoc, Timestamp } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
+import { ref as storageRef, uploadString, getDownloadURL } from 'firebase/storage';
+import { db, storage, app } from '@/lib/firebase'; // Added storage and app
 import type { Game, GameStatus, PlayerKey } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
 import { generateImage as genImageFlow } from '@/ai/flows/generate-image';
@@ -94,15 +95,9 @@ export function useGame() {
       [lastSeenField]: serverTimestamp(),
     };
 
-    // If player clears input, also clear final prompt *and image* if no image is generated yet or if they are allowed to resubmit
-    // Current logic in PlayerPromptForm handles enabling/disabling submit, this just ensures data consistency.
     if (typingPrompt === "" && game && !game[imageField]) { 
-        // If they clear typing, and no image exists for their final prompt, 
-        // clear the final prompt too. This means they abandoned that submission attempt.
-        // The image field itself is not cleared here, only on new submission or reset.
       updates[finalPromptField] = ""; 
     }
-
 
     await updateGameData(updates);
   }, [updateGameData, game]);
@@ -113,24 +108,38 @@ export function useGame() {
     const typingField = player === "playerOne" ? "playerOneTypingPrompt" : "playerTwoTypingPrompt";
     const lastSeenField = player === "playerOne" ? "playerOneLastSeen" : "playerTwoLastSeen";
 
-    // Clear previous image for this player before generating a new one
     await updateGameData({ 
       [promptField]: playerPrompt,
-      [imageField]: "", // Clear existing image for this player
-      [typingField]: "", // Clear typing prompt after submission
+      [imageField]: "", 
+      [typingField]: "", 
       [lastSeenField]: serverTimestamp()
     });
 
     try {
-      const { imageUrl } = await genImageFlow({ prompt: playerPrompt });
-      await updateGameData({ [imageField]: imageUrl, [lastSeenField]: serverTimestamp() }); // Update lastSeen again after image gen
-      toast({ title: "Submission Successful", description: `${player === "playerOne" ? "Player One's" : "Player Two's"} image generated.` });
-      return imageUrl;
+      // 1. Generate image (returns a base64 data URI)
+      const { imageUrl: imageDataUri } = await genImageFlow({ prompt: playerPrompt });
+
+      if (!imageDataUri) {
+        throw new Error("Image generation returned no data.");
+      }
+      
+      // 2. Upload image data URI to Firebase Storage
+      const imageFileName = `${player}-${Date.now()}.png`;
+      const imagePath = `game-images/${GAME_ID}/${imageFileName}`;
+      const sRef = storageRef(storage, imagePath);
+      
+      const uploadResult = await uploadString(sRef, imageDataUri, 'data_url');
+      const downloadURL = await getDownloadURL(uploadResult.ref);
+
+      // 3. Update Firestore with the download URL
+      await updateGameData({ [imageField]: downloadURL, [lastSeenField]: serverTimestamp() });
+      toast({ title: "Submission Successful", description: `${player === "playerOne" ? "Player One's" : "Player Two's"} image generated and stored.` });
+      return downloadURL;
+
     } catch (e: any) {
-      console.error(`Error generating image for ${player}:`, e);
-      toast({ title: "Image Generation Failed", description: e.message || "Could not generate image.", variant: "destructive" });
-      // The image field was already cleared, so no need to clear it again on error here.
-      // We might want to clear the promptField if generation fails and they should retry
+      console.error(`Error processing image for ${player}:`, e);
+      toast({ title: "Image Processing Failed", description: e.message || "Could not generate or store image.", variant: "destructive" });
+      // Optionally clear the prompt if submission fails critically
       // await updateGameData({ [promptField]: "", [lastSeenField]: serverTimestamp() });
       throw e;
     }
@@ -156,17 +165,15 @@ export function useGame() {
       playerTwoTypingPrompt: "",
       imagesRevealed: false, 
       status: "waiting",
-      // Keep playerOneLastSeen and playerTwoLastSeen as they are, or set to null?
-      // Setting to null might be better to indicate they are not "active" in the new round yet.
       playerOneLastSeen: null, 
       playerTwoLastSeen: null,
     };
     if (newCentralPrompt !== undefined && newCentralPrompt.trim() !== "") {
       updates.prompt = newCentralPrompt;
     } else if (game?.prompt) {
-      updates.prompt = game.prompt; // Keep current prompt if no new one provided
+      updates.prompt = game.prompt; 
     } else {
-      updates.prompt = defaultGameData.prompt; // Fallback to default if nothing else
+      updates.prompt = defaultGameData.prompt; 
     }
     await updateGameData(updates);
     toast({title: "Round Reset", description: "Player submissions cleared, ready for a new round."});
@@ -175,11 +182,9 @@ export function useGame() {
   const resetGame = useCallback(async () => {
     const gameDocRef = doc(db, "games", GAME_ID);
     try {
-      const existingCreatedAt = game?.createdAt || serverTimestamp(); // Preserve original creation time
-      // Reset all fields to default, but keep createdAt
+      const existingCreatedAt = game?.createdAt || serverTimestamp(); 
       const gameDataToSet = { ...defaultGameData, createdAt: existingCreatedAt, updatedAt: serverTimestamp()};
       await setDoc(gameDocRef, gameDataToSet);
-      // setGame(gameDataToSet as Game); // Update local state immediately
       toast({ title: "Game Reset", description: "The entire game has been reset to defaults." });
     } catch (e:any) {
       console.error("Error resetting game:", e);

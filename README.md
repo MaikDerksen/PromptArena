@@ -4,8 +4,7 @@
 Welcome to PromptArena! This platform allows two players to engage in a creative text-to-image battle. Players submit prompts based on a central theme, an AI generates images from these prompts, and viewers can watch the action unfold live. An admin panel provides controls to manage the game.
 
 Viewer POV:
-![ViewShow](https://github.com/user-attachments/assets/f8b1e0ba-049b-4396-bf26-a778df2f1085)
-![ViewHide](https://github.com/user-attachments/assets/d4ff8e8e-0d1c-4ea6-8ec9-2bd083a6deee)
+![ViewShowUpdate2](https://github.com/user-attachments/assets/91098bac-73b3-497d-8348-9a3b181a81c2)
 
 Player 1 POV:
 ![PlayerOne](https://github.com/user-attachments/assets/a26bf57a-468e-4ac8-99a0-2950ee3796a8)

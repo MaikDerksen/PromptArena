@@ -63,10 +63,10 @@ export default function ViewerPage() {
 
         <Card className="hidden lg:block lg:col-span-1 sticky top-24 self-start bg-transparent border-0 shadow-none">
           <CardContent className="text-center p-4">
-             <p className="text-sm text-muted-foreground mt-4">
+             <p className="text-sm text-muted-foreground">
                 {game.status === 'active' && !game.imagesRevealed && (!!game.playerOneImage || !!game.playerTwoImage) ? "Waiting for Admin to reveal images..." : "The battle unfolds!"}
              </p>
-             <p className="text-xs text-muted-foreground mt-2">Prompts and images update live.</p>
+             <p className="text-xs text-muted-foreground mt-1">Prompts and images update live.</p>
           </CardContent>
         </Card>
 

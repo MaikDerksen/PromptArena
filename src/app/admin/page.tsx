@@ -13,8 +13,8 @@ import ImageCard from '@/components/image-card';
 import GameStatusBadge from '@/components/game-status-badge';
 import { AlertCircle, Edit3, Play, RotateCcw, SkipForward, Eye, UserCheck, UserX, Image as ImageIcon, CheckCircle, Wifi, HelpCircle } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import type { Timestamp } from 'firebase/firestore';
-import { generateImage } from '@/ai/flows/generate-image'; // Import the flow directly
+import type { Timestamp } from 'firebase/firestore'; // Corrected: import Timestamp
+import { generateImage } from '@/ai/flows/generate-image'; 
 
 const formatLastSeen = (lastSeen: Timestamp | Date | null): {text: string, icon: JSX.Element} => {
   if (!lastSeen) return { text: "Never active", icon: <UserX className="text-destructive h-4 w-4" /> };
@@ -241,16 +241,16 @@ export default function AdminPage() {
             playerName="Player One"
             finalPrompt={game.playerOnePrompt}
             imageUrl={game.playerOneImage}
-            isLiveTypingView={false} // Admin sees final prompts
-            imagesRevealed={true} // Admin always sees images
+            isLiveTypingView={false} 
+            imagesRevealed={true} 
             isGenerating={game.status === 'active' && !!game.playerOnePrompt && !game.playerOneImage}
           />
           <ImageCard
             playerName="Player Two"
             finalPrompt={game.playerTwoPrompt}
             imageUrl={game.playerTwoImage}
-            isLiveTypingView={false} // Admin sees final prompts
-            imagesRevealed={true} // Admin always sees images
+            isLiveTypingView={false} 
+            imagesRevealed={true} 
             isGenerating={game.status === 'active' && !!game.playerTwoPrompt && !game.playerTwoImage}
           />
         </CardContent>

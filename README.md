@@ -44,7 +44,7 @@ PromptArena is a real-time, interactive web application where creativity meets A
     *   Test the image generation API connection.
 *   **Real-time Updates**: Firebase Firestore ensures that all game state changes are reflected live across all clients (players, viewers, admin).
 *   **User-Specific Image Storage**: Generated images are stored in Firebase Storage, organized by user ID.
-*   **Buy Credits Page (Placeholder)**: UI for purchasing more credits (actual payment integration not yet implemented).
+*   **Buy Credits Page (with Stripe Checkout Integration - Webhook for credit update is a stub)**: UI for purchasing more credits. Redirects to Stripe for payment. Actual credit update after payment requires full webhook implementation.
 
 ## Tech Stack
 
@@ -60,6 +60,8 @@ PromptArena is a real-time, interactive web application where creativity meets A
 *   **AI Integration**:
     *   Genkit
     *   Google Gemini API (for image generation)
+*   **Payments (Conceptual/Partial)**:
+    *   Stripe (Checkout for payment collection; webhook for fulfillment is a stub)
 
 ## Prerequisites
 
@@ -70,7 +72,7 @@ Before you begin, ensure you have the following installed and set up:
 *   **Firebase Account**: Create one for free at [firebase.google.com](https://firebase.google.com/).
 *   **Google Cloud Project / Google AI Studio Account**:
     *   You'll need this to obtain an API key for the Gemini API. Using [Google AI Studio](https://aistudio.google.com/) is often the quickest way to get an API key for experimentation.
-*   **(Optional for Payment Integration) Stripe Account**: If you plan to implement real payments, you'll need a Stripe account ([stripe.com](https://stripe.com/)).
+*   **Stripe Account**: If you plan to implement real payments, you'll need a Stripe account ([stripe.com](https://stripe.com/)).
 
 ## Setup Instructions
 
@@ -126,12 +128,25 @@ Follow these steps to get PromptArena running on your local machine:
     *   Click on "**Get API key**" (you might need to create a new project or select an existing one).
     *   Copy the generated API key.
 
-5.  **(Optional) Stripe API Keys Setup**:
-    *   If you plan to integrate Stripe for payments:
+5.  **Stripe API Keys & Products Setup**:
     *   Log in to your [Stripe Dashboard](https://dashboard.stripe.com/).
     *   Navigate to "Developers" > "API keys".
-    *   You'll find your **Publishable key** (starts with `pk_test_` or `pk_live_`) and **Secret key** (starts with `sk_test_` or `sk_live_`). Copy these.
-        *   _Note: Use test keys for development._
+        *   You'll find your **Publishable key** (starts with `pk_test_` or `pk_live_`) and **Secret key** (starts with `sk_test_` or `sk_live_`). Copy these. Use test keys for development.
+    *   **Create Products and Prices in Stripe**:
+        1.  Go to "Products" in your Stripe Dashboard.
+        2.  For each credit package you want to offer (e.g., "Starter Pack", "Creator Bundle"):
+            *   Click "+ Add product".
+            *   Fill in the product name.
+            *   Under "Pricing", set the price (e.g., $1.99) and ensure it's a "One-time" payment.
+            *   Save the product.
+            *   After saving, you'll see a "Price ID" (e.g., `price_1PExample...`). **Copy this Price ID.** You will need to update these IDs in `src/app/buy-credits/page.tsx` in the `creditPackages` array.
+    *   **Webhook Secret (for fulfillment)**:
+        1.  Later, when you deploy your app and want to automate credit updates, you'll set up a webhook endpoint.
+        2.  In Stripe Dashboard: "Developers" > "Webhooks".
+        3.  Click "Add endpoint".
+        4.  Enter your deployed endpoint URL (e.g., `https://your-app-url.com/api/stripe-webhook`).
+        5.  Select events to listen for, at least `checkout.session.completed`.
+        6.  After creating the endpoint, Stripe will show you a "Signing secret" (e.g., `whsec_...`). Copy this.
 
 6.  **Environment Variables**:
     *   In the root directory of your cloned project, create a new file named `.env`.
@@ -139,7 +154,7 @@ Follow these steps to get PromptArena running on your local machine:
     *   Fill in the placeholder values:
 
         ```env
-        # Firebase Configuration - Get these from your Firebase project settings
+        # Firebase Configuration
         NEXT_PUBLIC_FIREBASE_API_KEY="YOUR_FIREBASE_API_KEY"
         NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN="YOUR_FIREBASE_AUTH_DOMAIN"
         NEXT_PUBLIC_FIREBASE_PROJECT_ID="YOUR_FIREBASE_PROJECT_ID"
@@ -147,14 +162,13 @@ Follow these steps to get PromptArena running on your local machine:
         NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID="YOUR_FIREBASE_MESSAGING_SENDER_ID"
         NEXT_PUBLIC_FIREBASE_APP_ID="YOUR_FIREBASE_APP_ID"
 
-        # Google AI (Gemini) API Key - Get this from Google AI Studio
+        # Google AI (Gemini) API Key
         GOOGLE_API_KEY="YOUR_GEMINI_API_KEY_HERE"
 
-        # Stripe API Keys (Optional - for payment processing)
-        # Get these from your Stripe Dashboard (Developers > API Keys)
-        # Use your TEST keys for development
-        NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY="YOUR_STRIPE_PUBLISHABLE_KEY_HERE"
-        STRIPE_SECRET_KEY="YOUR_STRIPE_SECRET_KEY_HERE"
+        # Stripe API Keys
+        NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY="pk_test_YOUR_STRIPE_PUBLISHABLE_KEY"
+        STRIPE_SECRET_KEY="sk_test_YOUR_STRIPE_SECRET_KEY"
+        STRIPE_WEBHOOK_SECRET="whsec_YOUR_STRIPE_WEBHOOK_SECRET" # Needed for secure credit updates
         ```
 
 7.  **Firebase Security Rules**:
@@ -202,6 +216,19 @@ To run the production build:
 npm run start
 ```
 
+## Stripe Webhook for Credit Updates (Important for Production)
+
+The current implementation redirects users to Stripe for payment. After successful payment, Stripe can notify your application via a webhook. The `src/app/api/stripe-webhook/route.ts` file is a **STUB** and **DOES NOT automatically update user credits.**
+
+**For a production system, you MUST fully implement this webhook:**
+1.  **Securely Verify Signatures**: Use the `STRIPE_WEBHOOK_SECRET` to ensure requests are genuinely from Stripe.
+2.  **Process `checkout.session.completed` Events**: When this event occurs:
+    *   Retrieve the `client_reference_id` (which you set to `currentUser.uid` during checkout session creation).
+    *   Determine the amount of credits purchased (e.g., from `line_items` or custom `metadata` you can add to the Checkout Session).
+    *   Atomically update the user's `credits` in your Firebase Firestore `users` collection.
+3.  **Deploy the Webhook**: Your webhook endpoint must be publicly accessible for Stripe to reach it.
+4.  **Configure in Stripe Dashboard**: Add the URL of your deployed webhook endpoint in the Stripe dashboard and select the events to listen to (e.g., `checkout.session.completed`).
+
 ## Deployment (Optional - Example: Firebase App Hosting)
 
 If you wish to deploy your application, Firebase App Hosting is a good option for Next.js apps.
@@ -223,25 +250,25 @@ If you wish to deploy your application, Firebase App Hosting is a good option fo
     ```bash
     firebase deploy --only apphosting
     ```
+    Remember to update your Stripe webhook endpoint URL in the Stripe dashboard to your deployed app's URL.
 
 ## Troubleshooting
 
 *   **`Firebase: Error (auth/invalid-api-key)` or similar Firebase connection issues**:
-    *   Double-check that all `NEXT_PUBLIC_FIREBASE_...` variables in your `.env` file are correct and match your Firebase project's web app config.
-    *   Ensure you've restarted the Next.js development server (`npm run dev`) after modifying the `.env` file.
-*   **Images not loading from Firebase Storage / `next/image` errors**:
-    *   Verify that `firebasestorage.googleapis.com` is listed in the `images.remotePatterns` section of your `next.config.ts` file.
-    *   Restart the dev server after any changes to `next.config.ts`.
+    *   Double-check that all `NEXT_PUBLIC_FIREBASE_...` variables in your `.env` file are correct.
+    *   Restart the Next.js dev server after modifying `.env`.
+*   **Images not loading from Firebase Storage**:
+    *   Verify that `firebasestorage.googleapis.com` is in `next.config.ts`.
 *   **Firestore permission errors (`PERMISSION_DENIED`)**:
-    *   Make sure you have correctly copied and published the rules from `firestore.rules` and `storage.rules` to your Firebase project in the console.
-    *   Ensure you are logged in when trying to access protected resources or perform actions that require authentication according to the rules.
-*   **Gemini API errors / Image generation failing**:
-    *   Ensure your `GOOGLE_API_KEY` in `.env` is correct and active.
-    *   Check the Google AI Studio or Google Cloud Console for any issues with your API key or billing (if applicable beyond the free tier).
-    *   The admin panel's "Test Image Generation API" button can help diagnose this.
-*   **Credit Issues**:
-    *   New users should automatically receive `INITIAL_CREDITS` (defined in `src/contexts/auth-context.tsx`).
-    *   Image generation costs 1 credit. If a user runs out, they won't be able to generate more images.
+    *   Ensure `firestore.rules` and `storage.rules` are correctly published.
+    *   Ensure you are logged in for protected actions.
+*   **Gemini API errors**:
+    *   Check your `GOOGLE_API_KEY` in `.env`.
+*   **Stripe Errors / Payment Not Working**:
+    *   Ensure `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` and `STRIPE_SECRET_KEY` are correct in `.env`.
+    *   Check the Stripe Dashboard for logs or errors.
+    *   Verify that you have created Products and Prices in Stripe and that their Price IDs in `src/app/buy-credits/page.tsx` match.
+*   **Credits Not Updating After Payment**:
+    *   This is expected with the current stubbed webhook. You need to fully implement `src/app/api/stripe-webhook/route.ts` with signature verification and Firestore update logic.
 
 Thank you for using PromptArena!
-```

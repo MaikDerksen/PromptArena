@@ -1,6 +1,7 @@
 
 'use client';
 
+import { useState } from 'react';
 import { useAuth } from '@/contexts/auth-context';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
@@ -9,6 +10,10 @@ import AuthGuard from '@/components/auth-guard';
 import LoadingSpinner from '@/components/loading-spinner';
 import { CreditCard, Coins, ShoppingCart, Info } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { loadStripe } from '@stripe/stripe-js';
+
+// Ensure your Stripe publishable key is set in your .env file
+const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!);
 
 interface CreditPackage {
   id: string;
@@ -17,8 +22,11 @@ interface CreditPackage {
   price: string;
   description: string;
   icon: JSX.Element;
+  stripePriceId: string; // Add your Stripe Price ID here
 }
 
+// IMPORTANT: Replace these stripePriceId values with YOUR ACTUAL STRIPE PRICE IDs
+// You need to create these products and prices in your Stripe Dashboard.
 const creditPackages: CreditPackage[] = [
   {
     id: 'starter',
@@ -27,6 +35,7 @@ const creditPackages: CreditPackage[] = [
     price: '$1.99',
     description: 'A small boost to get you going.',
     icon: <Coins className="w-8 h-8 text-primary" />,
+    stripePriceId: 'price_YOUR_STARTER_PACK_PRICE_ID', // Replace!
   },
   {
     id: 'creator',
@@ -35,6 +44,7 @@ const creditPackages: CreditPackage[] = [
     price: '$7.99',
     description: 'Perfect for regular battlers.',
     icon: <ShoppingCart className="w-8 h-8 text-primary" />,
+    stripePriceId: 'price_YOUR_CREATOR_BUNDLE_PRICE_ID', // Replace!
   },
   {
     id: 'arena_master',
@@ -43,21 +53,60 @@ const creditPackages: CreditPackage[] = [
     price: '$19.99',
     description: 'Dominate the arena with plenty of credits!',
     icon: <CreditCard className="w-8 h-8 text-primary" />,
+    stripePriceId: 'price_YOUR_ARENA_MASTER_PRICE_ID', // Replace!
   },
 ];
 
 function BuyCreditsPageContent() {
   const { userProfile, loading: authLoading } = useAuth();
   const { toast } = useToast();
+  const [isProcessingPayment, setIsProcessingPayment] = useState<string | null>(null); // Store ID of package being processed
 
-  const handleBuyCredits = (pkg: CreditPackage) => {
-    toast({
-      title: 'Payment Placeholder',
-      description: `You selected the "${pkg.name}". Actual payment processing is not implemented.`,
-      variant: 'default',
-    });
-    console.log(`User ${userProfile?.email} attempted to buy package: ${pkg.name} for ${pkg.price}`);
-    // In a real application, this would initiate the payment flow with a provider like Stripe.
+  const handleBuyCredits = async (pkg: CreditPackage) => {
+    if (!userProfile) {
+        toast({ title: "Login Required", description: "Please log in to purchase credits.", variant: "destructive"});
+        return;
+    }
+    if (!pkg.stripePriceId || pkg.stripePriceId.startsWith('price_YOUR_')) {
+        toast({ title: "Configuration Error", description: "Stripe Price ID for this package is not configured correctly.", variant: "destructive"});
+        console.error("Stripe Price ID missing or placeholder for package:", pkg.name);
+        return;
+    }
+
+    setIsProcessingPayment(pkg.id);
+
+    try {
+      const response = await fetch('/api/create-checkout-session', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ priceId: pkg.stripePriceId, userId: userProfile.uid, creditsAmount: pkg.credits }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to create checkout session.');
+      }
+
+      const { sessionId } = await response.json();
+      const stripe = await stripePromise;
+
+      if (stripe) {
+        const { error } = await stripe.redirectToCheckout({ sessionId });
+        if (error) {
+          console.error('Stripe redirect error:', error);
+          toast({ title: 'Payment Error', description: error.message || "Could not redirect to Stripe.", variant: 'destructive' });
+        }
+      } else {
+         throw new Error("Stripe.js failed to load.");
+      }
+    } catch (error: any) {
+      console.error('Payment initiation error:', error);
+      toast({ title: 'Payment Error', description: error.message || 'Could not initiate payment.', variant: 'destructive' });
+    } finally {
+      setIsProcessingPayment(null);
+    }
   };
 
   if (authLoading) {
@@ -69,6 +118,7 @@ function BuyCreditsPageContent() {
   }
 
   if (!userProfile) {
+    // This should ideally be caught by AuthGuard, but as a fallback
     return <p>Please log in to view and purchase credits.</p>;
   }
 
@@ -86,12 +136,13 @@ function BuyCreditsPageContent() {
         </CardHeader>
       </Card>
 
-      <Alert>
-        <Info className="h-4 w-4" />
-        <AlertTitle>Payment System Placeholder</AlertTitle>
-        <AlertDescription>
-          This page demonstrates where a payment system would be integrated. Clicking "Buy" will not process any real payment or add credits.
-          To implement payments, you would typically integrate a service like Stripe.
+      <Alert variant="default" className="bg-yellow-500/10 border-yellow-600/50">
+        <Info className="h-4 w-4 text-yellow-600" />
+        <AlertTitle className="text-yellow-700">Important: Credit Updates</AlertTitle>
+        <AlertDescription className="text-yellow-700">
+          After a successful payment via Stripe, your credits will be updated once the payment is confirmed by our server. This usually happens within a few moments. If you don't see your credits updated immediately, please wait a short while and refresh.
+          <br />
+          <strong>Note for Developers:</strong> The webhook for automatic credit updates (`/api/stripe-webhook`) is currently a stub. For production, it must be fully implemented to handle `checkout.session.completed` events and update Firestore.
         </AlertDescription>
       </Alert>
 
@@ -108,15 +159,25 @@ function BuyCreditsPageContent() {
               <p className="text-xl font-semibold">{pkg.price}</p>
             </CardContent>
             <CardFooter>
-              <Button className="w-full text-lg py-3" onClick={() => handleBuyCredits(pkg)}>
-                Buy Now
+              <Button 
+                className="w-full text-lg py-3" 
+                onClick={() => handleBuyCredits(pkg)}
+                disabled={isProcessingPayment === pkg.id || !userProfile || pkg.stripePriceId.startsWith('price_YOUR_')}
+              >
+                {isProcessingPayment === pkg.id ? (
+                  <><LoadingSpinner className="mr-2"/> Processing...</>
+                ) : (
+                  'Buy Now'
+                )}
               </Button>
             </CardFooter>
           </Card>
         ))}
       </div>
-       <p className="text-center text-sm text-muted-foreground mt-8">
+      <p className="text-center text-sm text-muted-foreground mt-8">
         Credits are used to generate images in PromptArena. Each image generation costs 1 credit.
+        <br />
+        Payments are processed securely by Stripe. We do not store your card details.
       </p>
     </div>
   );

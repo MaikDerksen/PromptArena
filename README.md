@@ -30,6 +30,8 @@ PromptArena is a real-time, interactive web application where creativity meets A
 
 ## Features
 
+*   **User Authentication**: Secure sign-up and login for players and admin.
+*   **Credit System**: Users receive initial credits and spend them to generate images.
 *   **Player Interface**: Dedicated pages for Player One and Player Two to submit their prompts.
 *   **AI Image Generation**: Utilizes Google's Gemini model via Genkit to generate images from text prompts.
 *   **Live Viewer Page**: Spectators can see the central prompt, player typing progress in real-time, final submitted prompts, and the generated images (once revealed by admin).
@@ -38,9 +40,11 @@ PromptArena is a real-time, interactive web application where creativity meets A
     *   Start, pause, complete, and reset game rounds.
     *   Reveal generated images to viewers.
     *   Monitor player activity (last seen online/typing).
+    *   View own credit balance.
     *   Test the image generation API connection.
 *   **Real-time Updates**: Firebase Firestore ensures that all game state changes are reflected live across all clients (players, viewers, admin).
-*   **Image Storage**: Generated images are stored in Firebase Storage.
+*   **User-Specific Image Storage**: Generated images are stored in Firebase Storage, organized by user ID.
+*   **Buy Credits Page (Placeholder)**: UI for purchasing more credits (actual payment integration not yet implemented).
 
 ## Tech Stack
 
@@ -52,7 +56,7 @@ PromptArena is a real-time, interactive web application where creativity meets A
     *   Tailwind CSS
     *   ShadCN UI (for pre-built components)
 *   **Backend & Real-time**:
-    *   Firebase (Firestore for database, Storage for images)
+    *   Firebase (Authentication, Firestore for database, Storage for images)
 *   **AI Integration**:
     *   Genkit
     *   Google Gemini API (for image generation)
@@ -66,6 +70,7 @@ Before you begin, ensure you have the following installed and set up:
 *   **Firebase Account**: Create one for free at [firebase.google.com](https://firebase.google.com/).
 *   **Google Cloud Project / Google AI Studio Account**:
     *   You'll need this to obtain an API key for the Gemini API. Using [Google AI Studio](https://aistudio.google.com/) is often the quickest way to get an API key for experimentation.
+*   **(Optional for Payment Integration) Stripe Account**: If you plan to implement real payments, you'll need a Stripe account ([stripe.com](https://stripe.com/)).
 
 ## Setup Instructions
 
@@ -88,19 +93,23 @@ Follow these steps to get PromptArena running on your local machine:
     *   Go to the [Firebase Console](https://console.firebase.google.com/).
     *   Click on "**Add project**" or "**Create a project**".
     *   Follow the on-screen instructions to create your project (e.g., give it a name like "PromptArenaDev").
-    *   Once your project is created, you'll need to set up Firestore and Storage:
+    *   Once your project is created, you'll need to set up Authentication, Firestore, and Storage:
+
+    *   **Enable Authentication (Email/Password)**:
+        1.  In your Firebase project dashboard, navigate to "Build" > "Authentication".
+        2.  Go to the "Sign-in method" tab.
+        3.  Find "Email/Password", click the pencil icon, enable it, and save.
 
     *   **Enable Firestore**:
-        1.  In your Firebase project dashboard, navigate to "Build" (in the left sidebar) > "Firestore Database".
+        1.  Navigate to "Build" > "Firestore Database".
         2.  Click "**Create database**".
-        3.  Choose to start in **test mode**.
-            *   _Note: Test mode allows open read/write access for 30 days. For production, you **must** configure secure Firebase Security Rules._
-        4.  Select a location for your Firestore database (choose a region close to your users). Click "Enable".
+        3.  Choose to start in **test mode**. (You will update rules later).
+        4.  Select a location for your Firestore database. Click "Enable".
 
     *   **Enable Firebase Storage**:
         1.  Navigate to "Build" > "Storage".
         2.  Click "**Get started**".
-        3.  Follow the prompts. The default security rules for Storage in test mode are generally fine for local development (they allow authenticated users to read/write). We will update these later.
+        3.  Follow the prompts (test mode is fine for initial setup).
         4.  Choose a location for your Storage bucket.
 
     *   **Register a Web App with Firebase**:
@@ -117,26 +126,39 @@ Follow these steps to get PromptArena running on your local machine:
     *   Click on "**Get API key**" (you might need to create a new project or select an existing one).
     *   Copy the generated API key.
 
-5.  **Environment Variables**:
+5.  **(Optional) Stripe API Keys Setup**:
+    *   If you plan to integrate Stripe for payments:
+    *   Log in to your [Stripe Dashboard](https://dashboard.stripe.com/).
+    *   Navigate to "Developers" > "API keys".
+    *   You'll find your **Publishable key** (starts with `pk_test_` or `pk_live_`) and **Secret key** (starts with `sk_test_` or `sk_live_`). Copy these.
+        *   _Note: Use test keys for development._
+
+6.  **Environment Variables**:
     *   In the root directory of your cloned project, create a new file named `.env`.
     *   Copy the contents from `.env.example` (also in the root of the project) into your new `.env` file.
-    *   Fill in the placeholder values with your actual Firebase project configuration values (from step 3) and your Gemini API key (from step 4):
+    *   Fill in the placeholder values:
 
         ```env
         # Firebase Configuration - Get these from your Firebase project settings
-        NEXT_PUBLIC_FIREBASE_API_KEY="YOUR_API_KEY"
-        NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN="YOUR_AUTH_DOMAIN"
-        NEXT_PUBLIC_FIREBASE_PROJECT_ID="YOUR_PROJECT_ID"
-        NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET="YOUR_STORAGE_BUCKET"
-        NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID="YOUR_MESSAGING_SENDER_ID"
-        NEXT_PUBLIC_FIREBASE_APP_ID="YOUR_APP_ID"
+        NEXT_PUBLIC_FIREBASE_API_KEY="YOUR_FIREBASE_API_KEY"
+        NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN="YOUR_FIREBASE_AUTH_DOMAIN"
+        NEXT_PUBLIC_FIREBASE_PROJECT_ID="YOUR_FIREBASE_PROJECT_ID"
+        NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET="YOUR_FIREBASE_STORAGE_BUCKET"
+        NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID="YOUR_FIREBASE_MESSAGING_SENDER_ID"
+        NEXT_PUBLIC_FIREBASE_APP_ID="YOUR_FIREBASE_APP_ID"
 
         # Google AI (Gemini) API Key - Get this from Google AI Studio
         GOOGLE_API_KEY="YOUR_GEMINI_API_KEY_HERE"
+
+        # Stripe API Keys (Optional - for payment processing)
+        # Get these from your Stripe Dashboard (Developers > API Keys)
+        # Use your TEST keys for development
+        NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY="YOUR_STRIPE_PUBLISHABLE_KEY_HERE"
+        STRIPE_SECRET_KEY="YOUR_STRIPE_SECRET_KEY_HERE"
         ```
 
-6.  **Firebase Security Rules**:
-    The project includes `firestore.rules` and `storage.rules` files with basic rules for development.
+7.  **Firebase Security Rules**:
+    The project includes `firestore.rules` and `storage.rules` files with rules appropriate for the authentication and credit system.
 
     *   **Firestore Rules**:
         1.  In the Firebase Console, go to your project > "Firestore Database" > "**Rules**" tab.
@@ -162,11 +184,12 @@ Follow these steps to get PromptArena running on your local machine:
 
 2.  **Accessing Pages**:
     Open your browser and navigate to:
-    *   **Home Page**: `http://localhost:9002/`
-    *   **Player One**: `http://localhost:9002/player-one`
-    *   **Player Two**: `http://localhost:9002/player-two`
+    *   **Home Page / Login**: `http://localhost:9002/` (or `http://localhost:9002/auth`)
+    *   **Player One**: `http://localhost:9002/player-one` (requires login)
+    *   **Player Two**: `http://localhost:9002/player-two` (requires login)
     *   **Viewer Page**: `http://localhost:9002/viewer`
-    *   **Admin Panel**: `http://localhost:9002/admin`
+    *   **Admin Panel**: `http://localhost:9002/admin` (requires login)
+    *   **Buy Credits**: `http://localhost:9002/buy-credits` (requires login)
 
 ## Building for Production
 
@@ -203,18 +226,22 @@ If you wish to deploy your application, Firebase App Hosting is a good option fo
 
 ## Troubleshooting
 
-*   **`Firebase: Error (auth/invalid-api-key)`**:
+*   **`Firebase: Error (auth/invalid-api-key)` or similar Firebase connection issues**:
     *   Double-check that all `NEXT_PUBLIC_FIREBASE_...` variables in your `.env` file are correct and match your Firebase project's web app config.
     *   Ensure you've restarted the Next.js development server (`npm run dev`) after modifying the `.env` file.
 *   **Images not loading from Firebase Storage / `next/image` errors**:
     *   Verify that `firebasestorage.googleapis.com` is listed in the `images.remotePatterns` section of your `next.config.ts` file.
     *   Restart the dev server after any changes to `next.config.ts`.
 *   **Firestore permission errors (`PERMISSION_DENIED`)**:
-    *   Make sure you have correctly copied and published the rules from `firestore.rules` to your Firestore database in the Firebase console.
-    *   If you're past the 30-day test mode limit, your rules might have reverted to deny all. Re-apply the development rules or implement proper authenticated rules.
+    *   Make sure you have correctly copied and published the rules from `firestore.rules` and `storage.rules` to your Firebase project in the console.
+    *   Ensure you are logged in when trying to access protected resources or perform actions that require authentication according to the rules.
 *   **Gemini API errors / Image generation failing**:
     *   Ensure your `GOOGLE_API_KEY` in `.env` is correct and active.
     *   Check the Google AI Studio or Google Cloud Console for any issues with your API key or billing (if applicable beyond the free tier).
     *   The admin panel's "Test Image Generation API" button can help diagnose this.
+*   **Credit Issues**:
+    *   New users should automatically receive `INITIAL_CREDITS` (defined in `src/contexts/auth-context.tsx`).
+    *   Image generation costs 1 credit. If a user runs out, they won't be able to generate more images.
 
 Thank you for using PromptArena!
+```

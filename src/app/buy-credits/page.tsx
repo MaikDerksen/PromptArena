@@ -22,11 +22,13 @@ interface CreditPackage {
   price: string;
   description: string;
   icon: JSX.Element;
-  stripePriceId: string; // This should be a Stripe Price ID (e.g., price_xxxxxxxxxxxxxx)
+  stripePriceId: string; // This MUST be a Stripe Price ID (e.g., price_xxxxxxxxxxxxxx)
 }
 
 // IMPORTANT: Replace these stripePriceId values with YOUR ACTUAL STRIPE PRICE IDs
 // You need to create these products and prices in your Stripe Dashboard.
+// The IDs for Creator and Starter provided by the user (evt_...) look like Event IDs, not Price IDs.
+// They should be Price IDs (price_...) for Stripe Checkout to work.
 const creditPackages: CreditPackage[] = [
   {
     id: 'starter',
@@ -35,7 +37,7 @@ const creditPackages: CreditPackage[] = [
     price: '$1.99',
     description: 'A small boost to get you going.',
     icon: <Coins className="w-8 h-8 text-primary" />,
-    stripePriceId: 'prod_SWr6WVWRceP18N', // User provided ID
+    stripePriceId: 'evt_1RbnOOGytZcWgBZzxXQj6SXO', // User provided ID - LIKELY INCORRECT, SHOULD BE A PRICE_ ID
   },
   {
     id: 'creator',
@@ -44,7 +46,7 @@ const creditPackages: CreditPackage[] = [
     price: '$7.99',
     description: 'Perfect for regular battlers.',
     icon: <ShoppingCart className="w-8 h-8 text-primary" />,
-    stripePriceId: 'prod_SWr7CR7m80Zo8B', // User provided ID
+    stripePriceId: 'evt_1RbnPJGytZcWgBZzbO7tz07z', // User provided ID - LIKELY INCORRECT, SHOULD BE A PRICE_ ID
   },
   {
     id: 'arena_master',
@@ -53,12 +55,12 @@ const creditPackages: CreditPackage[] = [
     price: '$19.99',
     description: 'Dominate the arena with plenty of credits!',
     icon: <CreditCard className="w-8 h-8 text-primary" />,
-    stripePriceId: 'prod_SWr8jg1IrI4SDU', // User provided ID
+    stripePriceId: 'price_1RbnPyGytZcWgBZzwjJZXFwg', // User provided ID - Looks correct
   },
 ];
 
 function BuyCreditsPageContent() {
-  const { userProfile, loading: authLoading } = useAuth();
+  const { userProfile, loading: authLoading, refreshUserProfile } = useAuth();
   const { toast } = useToast();
   const [isProcessingPayment, setIsProcessingPayment] = useState<string | null>(null); // Store ID of package being processed
 
@@ -67,11 +69,15 @@ function BuyCreditsPageContent() {
         toast({ title: "Login Required", description: "Please log in to purchase credits.", variant: "destructive"});
         return;
     }
-    // Basic check to see if it's still a placeholder, though user is providing new IDs.
-    // The main check should be if Stripe can use this ID.
-    if (!pkg.stripePriceId || pkg.stripePriceId.includes('_YOUR_') || pkg.stripePriceId.includes('price_YOUR_')) {
-        toast({ title: "Configuration Error", description: "Stripe Price ID for this package is not configured correctly. Please use actual Price IDs from your Stripe Dashboard.", variant: "destructive"});
-        console.error("Stripe Price ID missing or placeholder for package:", pkg.name);
+    
+    if (!pkg.stripePriceId || !pkg.stripePriceId.startsWith('price_')) {
+        toast({ 
+            title: "Configuration Error", 
+            description: `The Stripe ID for "${pkg.name}" (${pkg.stripePriceId}) does not look like a valid Price ID (e.g., price_xxxxxxxxxxxxxx). Please check your Stripe Dashboard.`, 
+            variant: "destructive",
+            duration: 10000 
+        });
+        console.error("Stripe Price ID for package:", pkg.name, "is likely incorrect:", pkg.stripePriceId);
         return;
     }
 
@@ -100,6 +106,8 @@ function BuyCreditsPageContent() {
           console.error('Stripe redirect error:', error);
           toast({ title: 'Payment Error', description: error.message || "Could not redirect to Stripe.", variant: 'destructive' });
         }
+        // If redirect is successful, user leaves the page.
+        // We might want to refresh user profile upon their return to success/cancel page or app focus.
       } else {
          throw new Error("Stripe.js failed to load.");
       }
@@ -110,6 +118,16 @@ function BuyCreditsPageContent() {
       setIsProcessingPayment(null);
     }
   };
+  
+  // Refresh user profile when component mounts or user changes,
+  // in case they are returning from Stripe.
+  useEffect(() => {
+    if(userProfile){
+        refreshUserProfile();
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userProfile?.uid]); // Only re-run if UID changes to avoid loops
+
 
   if (authLoading) {
     return (
@@ -142,7 +160,7 @@ function BuyCreditsPageContent() {
         <Info className="h-4 w-4 text-yellow-600" />
         <AlertTitle className="text-yellow-700">Important: Stripe IDs & Credit Updates</AlertTitle>
         <AlertDescription className="text-yellow-700">
-          Please ensure the Stripe IDs used for packages are **Price IDs** (e.g., `price_xxxxxxxxxxxxxx`) from your Stripe Dashboard. Product IDs (`prod_...`) may not work correctly with the current Checkout integration.
+          Please ensure the Stripe IDs used for packages are **Price IDs** (e.g., `price_xxxxxxxxxxxxxx`) from your Stripe Dashboard. Product IDs (`prod_...`) or Event IDs (`evt_...`) will not work correctly with this Checkout integration.
           <br />
           After a successful payment via Stripe, your credits will be updated once the payment is confirmed by our server via the webhook. This usually happens within a few moments.
           <br />
@@ -166,7 +184,7 @@ function BuyCreditsPageContent() {
               <Button 
                 className="w-full text-lg py-3" 
                 onClick={() => handleBuyCredits(pkg)}
-                disabled={isProcessingPayment === pkg.id || !userProfile || pkg.stripePriceId.includes('_YOUR_') || pkg.stripePriceId.includes('price_YOUR_')}
+                disabled={isProcessingPayment === pkg.id || !userProfile }
               >
                 {isProcessingPayment === pkg.id ? (
                   <><LoadingSpinner className="mr-2"/> Processing...</>

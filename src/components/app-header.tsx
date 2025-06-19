@@ -3,7 +3,7 @@
 
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
-import { Gamepad2, LogIn, LogOut } from 'lucide-react';
+import { Gamepad2, LogIn, LogOut, CreditCard } from 'lucide-react';
 import { useAuth } from '@/contexts/auth-context';
 import { useRouter } from 'next/navigation';
 import { useToast } from '@/hooks/use-toast';
@@ -32,26 +32,33 @@ export default function AppHeader() {
         </Link>
         <nav className="flex items-center gap-1 sm:gap-2">
           {currentUser && userProfile && (
-             <span className="text-sm text-muted-foreground mr-2 hidden sm:inline">Credits: {userProfile.credits}</span>
+            <>
+             <span className="text-sm text-muted-foreground mr-1 hidden sm:inline">Credits: {userProfile.credits}</span>
+             <Button variant="ghost" size="sm" asChild>
+                <Link href="/buy-credits" className="flex items-center gap-1">
+                  <CreditCard className="h-4 w-4" /> Buy Credits
+                </Link>
+             </Button>
+            </>
           )}
-          <Button variant="ghost" asChild>
+          <Button variant="ghost" size="sm" asChild>
             <Link href="/viewer">Viewer</Link>
           </Button>
-          <Button variant="ghost" asChild>
+          <Button variant="ghost" size="sm" asChild>
             <Link href="/player-one">Player 1</Link>
           </Button>
-          <Button variant="ghost" asChild>
+          <Button variant="ghost" size="sm" asChild>
             <Link href="/player-two">Player 2</Link>
           </Button>
-          <Button variant="outline" asChild>
+          <Button variant="outline" size="sm" asChild>
             <Link href="/admin">Admin</Link>
           </Button>
           {currentUser ? (
-            <Button variant="ghost" onClick={handleLogout} className="text-red-500 hover:text-red-400">
+            <Button variant="ghost" size="sm" onClick={handleLogout} className="text-red-500 hover:text-red-400">
               <LogOut className="mr-1 h-4 w-4" /> Logout
             </Button>
           ) : (
-            <Button variant="default" asChild>
+            <Button variant="default" size="sm" asChild>
               <Link href="/auth"><LogIn className="mr-1 h-4 w-4" />Login</Link>
             </Button>
           )}

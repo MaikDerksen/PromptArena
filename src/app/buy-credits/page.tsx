@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/auth-context';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
@@ -27,8 +27,6 @@ interface CreditPackage {
 
 // IMPORTANT: Replace these stripePriceId values with YOUR ACTUAL STRIPE PRICE IDs
 // You need to create these products and prices in your Stripe Dashboard.
-// The IDs for Creator and Starter provided by the user (evt_...) look like Event IDs, not Price IDs.
-// They should be Price IDs (price_...) for Stripe Checkout to work.
 const creditPackages: CreditPackage[] = [
   {
     id: 'starter',
@@ -37,7 +35,7 @@ const creditPackages: CreditPackage[] = [
     price: '$1.99',
     description: 'A small boost to get you going.',
     icon: <Coins className="w-8 h-8 text-primary" />,
-    stripePriceId: 'evt_1RbnOOGytZcWgBZzxXQj6SXO', // User provided ID - LIKELY INCORRECT, SHOULD BE A PRICE_ ID
+    stripePriceId: 'price_1RbnOOGytZcWgBZzciiEq1IW', 
   },
   {
     id: 'creator',
@@ -46,7 +44,7 @@ const creditPackages: CreditPackage[] = [
     price: '$7.99',
     description: 'Perfect for regular battlers.',
     icon: <ShoppingCart className="w-8 h-8 text-primary" />,
-    stripePriceId: 'evt_1RbnPJGytZcWgBZzbO7tz07z', // User provided ID - LIKELY INCORRECT, SHOULD BE A PRICE_ ID
+    stripePriceId: 'price_1RbnPJGytZcWgBZzS5hf1tFl', 
   },
   {
     id: 'arena_master',
@@ -55,7 +53,7 @@ const creditPackages: CreditPackage[] = [
     price: '$19.99',
     description: 'Dominate the arena with plenty of credits!',
     icon: <CreditCard className="w-8 h-8 text-primary" />,
-    stripePriceId: 'price_1RbnPyGytZcWgBZzwjJZXFwg', // User provided ID - Looks correct
+    stripePriceId: 'price_1RbnPyGytZcWgBZzwjJZXFwg', 
   },
 ];
 

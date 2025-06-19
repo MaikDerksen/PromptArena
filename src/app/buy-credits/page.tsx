@@ -35,7 +35,7 @@ const creditPackages: CreditPackage[] = [
     price: '$1.99',
     description: 'A small boost to get you going.',
     icon: <Coins className="w-8 h-8 text-primary" />,
-    stripePriceId: 'price_1RbnOOGytZcWgBZzciiEq1IW', 
+    stripePriceId: 'price_1RbnwjGbzNii5AZqgqVNogUv', 
   },
   {
     id: 'creator',
@@ -44,7 +44,7 @@ const creditPackages: CreditPackage[] = [
     price: '$7.99',
     description: 'Perfect for regular battlers.',
     icon: <ShoppingCart className="w-8 h-8 text-primary" />,
-    stripePriceId: 'price_1RbnPJGytZcWgBZzS5hf1tFl', 
+    stripePriceId: 'price_1RbnxKGbzNii5AZqRs0TCysD', 
   },
   {
     id: 'arena_master',
@@ -53,7 +53,7 @@ const creditPackages: CreditPackage[] = [
     price: '$19.99',
     description: 'Dominate the arena with plenty of credits!',
     icon: <CreditCard className="w-8 h-8 text-primary" />,
-    stripePriceId: 'price_1RbnPyGytZcWgBZzwjJZXFwg', 
+    stripePriceId: 'price_1Rbny7GbzNii5AZqalXjVAff', 
   },
 ];
 

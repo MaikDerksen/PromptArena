@@ -5,22 +5,32 @@ import { stripe } from '@/lib/stripe'; // Your Stripe SDK instance
 import { doc, updateDoc, increment } from 'firebase/firestore';
 import { db } from '@/lib/firebase'; // Your Firestore instance
 
-// Make sure to set STRIPE_WEBHOOK_SECRET in your .env.local file
-const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET!;
-
 export async function POST(req: NextRequest) {
+  console.log('Stripe webhook received request');
   const rawBody = await req.text();
   const sig = req.headers.get('stripe-signature');
+  
+  // Log headers for debugging
+  // console.log('Stripe webhook headers:', JSON.stringify(req.headers));
+  // console.log('Stripe signature:', sig);
 
-  if (!sig || !webhookSecret) {
-    console.error('Webhook Error: Missing signature or webhook secret.');
-    return NextResponse.json({ error: 'Webhook signature verification failed. Missing signature or secret.' }, { status: 400 });
+  const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
+
+  if (!webhookSecret) {
+    console.error('Webhook Error: STRIPE_WEBHOOK_SECRET is not set in environment variables.');
+    return NextResponse.json({ error: 'Webhook secret is not configured.' }, { status: 500 });
+  }
+
+  if (!sig) {
+    console.error('Webhook Error: Missing stripe-signature header.');
+    return NextResponse.json({ error: 'Webhook signature verification failed. Missing signature.' }, { status: 400 });
   }
 
   let event: Stripe.Event;
 
   try {
     event = stripe.webhooks.constructEvent(rawBody, sig, webhookSecret);
+    console.log('Stripe event constructed successfully:', event.type);
   } catch (err: any) {
     console.error(`Webhook signature verification failed: ${err.message}`);
     return NextResponse.json({ error: `Webhook signature verification failed: ${err.message}` }, { status: 400 });
@@ -30,13 +40,7 @@ export async function POST(req: NextRequest) {
   switch (event.type) {
     case 'checkout.session.completed':
       const session = event.data.object as Stripe.Checkout.Session;
-      console.log('Checkout session completed:', session.id);
-
-      // IMPORTANT: Fulfillment logic (e.g., updating user credits)
-      // This is where you would:
-      // 1. Get the user ID (e.g., from session.client_reference_id or session.metadata.firebaseUID)
-      // 2. Get the number of credits purchased (e.g., from session.metadata.creditsPurchased or by looking up the price ID)
-      // 3. Securely update the user's credit balance in Firestore.
+      console.log('Checkout session completed, ID:', session.id);
 
       const userId = session.client_reference_id || session.metadata?.firebaseUID;
       const creditsPurchasedString = session.metadata?.creditsPurchased;
@@ -52,11 +56,11 @@ export async function POST(req: NextRequest) {
             console.log(`Successfully updated credits for user ${userId} by ${creditsPurchased}.`);
           } catch (firestoreError: any) {
             console.error(`Failed to update credits for user ${userId}: ${firestoreError.message}`);
-            // Optionally, handle this error, e.g., retry or log for manual intervention
+            // For a production app, you might want to retry this or flag for manual intervention
             return NextResponse.json({ error: 'Failed to update user credits in database.' }, { status: 500 });
           }
         } else {
-            console.error('Invalid creditsPurchased value in session metadata:', creditsPurchasedString);
+            console.error('Invalid creditsPurchased value in session metadata:', creditsPurchasedString, 'for session:', session.id);
         }
       } else {
         console.error('Missing userId or creditsPurchased in session metadata for session:', session.id);
@@ -64,7 +68,7 @@ export async function POST(req: NextRequest) {
       }
       break;
     
-    // ... handle other event types if needed
+    // You can handle other event types here if needed
     // case 'payment_intent.succeeded':
     //   const paymentIntent = event.data.object;
     //   console.log('PaymentIntent was successful!', paymentIntent);

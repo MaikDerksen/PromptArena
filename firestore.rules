@@ -3,28 +3,31 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Game document: /games/default-game
+
+    // Game data: public read, authenticated write for updates.
     match /games/{gameId} {
-      // Allow read access for everyone (players, viewers, admin)
-      allow read: if true;
-
-      // Allow creation of the game document if it doesn't exist
-      // This is typically handled by the application on first load if the game doesn't exist.
-      allow create: if request.resource.data.id == 'default-game';
-
-      // Allow updates to the game document
-      // This covers admin setting prompts/status, and players submitting their prompts/images.
-      // For production, this should be more granular (e.g., only admin can update `prompt` and `status`,
-      // players can only update their respective fields if authenticated and game is 'active').
-      allow update: if resource.data.id == 'default-game';
-
-      // Disallow deletion of the game document
-      allow delete: if false;
+      allow read: if true; // Viewers, players, admin can read game state.
+      allow create: if request.auth != null; // Allow authenticated users to initialize game if not present.
+      allow update: if request.auth != null; // Authenticated users (players, admin) can update.
+                                          // More granular control (e.g. only admin sets central prompt)
+                                          // would require checking request.auth.uid against specific admin UIDs
+                                          // or using custom claims.
+      allow delete: if false; // Game document should not be deleted.
     }
 
-    // Deny all other writes/reads by default if not explicitly allowed
-    match /{document=**} {
-      allow read, write: if false;
+    // User profiles: users can read and update their own profiles.
+    match /users/{userId} {
+      allow read: if request.auth != null && request.auth.uid == userId;
+      allow create: if request.auth != null && request.auth.uid == userId; // For signup
+      allow update: if request.auth != null && request.auth.uid == userId; // For credit updates by user
+                  // Ideally, credit deduction should be handled by a Cloud Function for security.
+                  // Allowing client-side credit updates is simpler but less secure.
+      allow delete: if false; // Users should not delete their profiles directly.
+    }
+
+    // Allow read access to genkit-state for development if needed, otherwise restrict
+    match /genkit-state/{document=**} {
+        allow read, write: if false; // Or adjust based on development needs
     }
   }
 }

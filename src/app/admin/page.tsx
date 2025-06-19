@@ -11,10 +11,12 @@ import { useGame } from '@/hooks/use-game';
 import LoadingSpinner from '@/components/loading-spinner';
 import ImageCard from '@/components/image-card';
 import GameStatusBadge from '@/components/game-status-badge';
-import { AlertCircle, Edit3, Play, RotateCcw, SkipForward, Eye, UserCheck, UserX, Image as ImageIcon, CheckCircle, Wifi, HelpCircle } from 'lucide-react';
+import { AlertCircle, Edit3, Play, RotateCcw, SkipForward, Eye, UserCheck, UserX, Image as ImageIcon, CheckCircle, Wifi, HelpCircle, CreditCard } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { Timestamp } from 'firebase/firestore'; // Corrected: import Timestamp as a value
+import { Timestamp } from 'firebase/firestore';
 import { generateImage } from '@/ai/flows/generate-image'; 
+import AuthGuard from '@/components/auth-guard';
+import { useAuth } from '@/contexts/auth-context';
 
 const formatLastSeen = (lastSeen: Timestamp | Date | null): {text: string, icon: JSX.Element} => {
   if (!lastSeen) return { text: "Never active", icon: <UserX className="text-destructive h-4 w-4" /> };
@@ -31,8 +33,9 @@ const formatLastSeen = (lastSeen: Timestamp | Date | null): {text: string, icon:
 };
 
 
-export default function AdminPage() {
-  const { game, loading, error: gameError, setCentralPrompt, updateGameStatus, revealImages, resetRound, resetGame } = useGame();
+function AdminPageContent() {
+  const { game, loading: gameLoading, error: gameError, setCentralPrompt, updateGameStatus, revealImages, resetRound, resetGame } = useGame();
+  const { userProfile, loading: authLoading } = useAuth();
   const [newPrompt, setNewPrompt] = useState('');
   const [isSubmittingPrompt, setIsSubmittingPrompt] = useState(false);
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
@@ -40,7 +43,6 @@ export default function AdminPage() {
 
   const [isTestingApi, setIsTestingApi] = useState(false);
   const [apiTestResult, setApiTestResult] = useState<{success: boolean, message: string, imageUrl?: string} | null>(null);
-
 
   useEffect(() => {
     if (game?.prompt) {
@@ -94,6 +96,9 @@ export default function AdminPage() {
       const testPrompt = "Test image: a friendly robot waving";
       const result = await generateImage({ prompt: testPrompt });
       if (result.imageUrl) {
+        // Since image generation test does not consume user credits,
+        // we can directly show the image for testing purposes.
+        // If it were a credit-based action, we'd handle it differently.
         setApiTestResult({ success: true, message: "API connection successful! Image generated.", imageUrl: result.imageUrl });
       } else {
         setApiTestResult({ success: false, message: "API call succeeded but no image URL was returned." });
@@ -106,12 +111,17 @@ export default function AdminPage() {
     }
   };
 
+  const loading = gameLoading || authLoading;
+
   if (loading) {
     return <div className="flex justify-center items-center h-64"><LoadingSpinner className="w-12 h-12" /> <span className="ml-2">Loading Admin Panel...</span></div>;
   }
 
   if (gameError || !game) {
     return <Alert variant="destructive"><AlertCircle className="h-4 w-4" /><AlertTitle>Error</AlertTitle><AlertDescription>Failed to load game data for admin panel. Details: {gameError || "Game data unavailable."}</AlertDescription></Alert>;
+  }
+   if (!userProfile) {
+    return <Alert variant="destructive"><AlertCircle className="h-4 w-4" /><AlertTitle>Error</AlertTitle><AlertDescription>User profile not found. Please ensure you are logged in correctly.</AlertDescription></Alert>;
   }
   
   const playerOneActivity = formatLastSeen(game.playerOneLastSeen || null);
@@ -123,9 +133,16 @@ export default function AdminPage() {
       <Card className="shadow-xl">
         <CardHeader>
           <CardTitle className="font-headline text-3xl">Admin Control Panel</CardTitle>
-          <div className="flex items-center gap-2 mt-2">
-            <CardDescription>Current Game Status:</CardDescription>
-            <GameStatusBadge status={game.status} />
+          <div className="flex items-center justify-between mt-2">
+            <div className="flex items-center gap-2">
+              <CardDescription>Current Game Status:</CardDescription>
+              <GameStatusBadge status={game.status} />
+            </div>
+            <div className="flex items-center gap-2 text-sm">
+                <CreditCard className="h-5 w-5 text-primary"/>
+                <span className="font-medium">Your Credits:</span> 
+                <span className="font-bold text-lg text-primary">{userProfile.credits}</span>
+            </div>
           </div>
         </CardHeader>
       </Card>
@@ -178,7 +195,7 @@ export default function AdminPage() {
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2"><HelpCircle className="text-primary"/> API & System Health</CardTitle>
-          <CardDescription>Test the connection to the image generation API.</CardDescription>
+          <CardDescription>Test the connection to the image generation API. This test does not consume credits.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <Button onClick={handleTestApi} disabled={isTestingApi}>
@@ -258,3 +275,12 @@ export default function AdminPage() {
     </div>
   );
 }
+
+export default function AdminPage() {
+  return (
+    <AuthGuard>
+      <AdminPageContent />
+    </AuthGuard>
+  );
+}
+

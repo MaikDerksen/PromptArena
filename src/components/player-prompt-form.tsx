@@ -10,9 +10,12 @@ import LoadingSpinner from './loading-spinner';
 import type { PlayerKey } from '@/lib/types';
 import { useGame } from '@/hooks/use-game';
 import ImageCard from './image-card';
-import { AlertCircle } from 'lucide-react';
+import { AlertCircle, Zap } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from './ui/alert';
 import { debounce } from '@/lib/utils';
+import { useAuth } from '@/contexts/auth-context'; // Import useAuth
+import { useToast } from '@/hooks/use-toast';
+
 
 interface PlayerPromptFormProps {
   playerKey: PlayerKey;
@@ -21,6 +24,9 @@ interface PlayerPromptFormProps {
 
 export default function PlayerPromptForm({ playerKey, playerName }: PlayerPromptFormProps) {
   const { game, submitPlayerPrompt, updatePlayerTypingPrompt, updatePlayerLastSeen, loading: gameLoading } = useGame();
+  const { currentUser, userProfile, loading: authLoading } = useAuth(); // Get user
+  const { toast } = useToast();
+  
   const [promptInput, setPromptInput] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -28,34 +34,45 @@ export default function PlayerPromptForm({ playerKey, playerName }: PlayerPrompt
   const finalSubmittedPrompt = playerKey === 'playerOne' ? game?.playerOnePrompt : game?.playerTwoPrompt;
   const currentImage = playerKey === 'playerOne' ? game?.playerOneImage : game?.playerTwoImage;
 
-  // Effect to update lastSeen when component mounts
+  // Effect to update lastSeen when component mounts or user changes
   useEffect(() => {
-    updatePlayerLastSeen(playerKey);
-  }, [playerKey, updatePlayerLastSeen]);
+    if (currentUser) {
+      updatePlayerLastSeen(playerKey);
+    }
+  }, [playerKey, updatePlayerLastSeen, currentUser]);
 
 
   // Debounced function to update typing prompt in Firestore
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const debouncedUpdateTypingPrompt = useCallback(
     debounce((player: PlayerKey, pInput: string) => {
-      if (game?.status === 'active') { // Only update if round is active
-        updatePlayerTypingPrompt(player, pInput); // This also updates lastSeen
+      if (currentUser && game?.status === 'active') { 
+        updatePlayerTypingPrompt(player, pInput);
       }
     }, 500), 
-    [updatePlayerTypingPrompt, game?.status] 
+    [updatePlayerTypingPrompt, game?.status, currentUser] 
   );
 
 
   const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const newPrompt = e.target.value;
     setPromptInput(newPrompt);
-    if (game?.status === 'active') {
+    if (currentUser && game?.status === 'active') {
       debouncedUpdateTypingPrompt(playerKey, newPrompt);
     }
   };
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    if (!currentUser || !userProfile) {
+      toast({title: "Not Logged In", description: "You must be logged in to submit a prompt.", variant: "destructive"});
+      return;
+    }
+    if (userProfile.credits <= 0) {
+      toast({title: "No Credits", description: "You have no credits left to generate an image.", variant: "destructive"});
+      return;
+    }
+
     if (!promptInput.trim() || !game || game.status !== 'active') {
       if (game?.status !== 'active') {
         setError("Cannot submit prompt: The round is not active.");
@@ -66,30 +83,49 @@ export default function PlayerPromptForm({ playerKey, playerName }: PlayerPrompt
     setIsSubmitting(true);
     try {
       await submitPlayerPrompt(playerKey, promptInput);
-      // Optionally clear input: setPromptInput(''); // Keeping it for now so player sees what they submitted
-    } catch (err: any) {      setError(err.message || "Failed to submit prompt or generate image.");
+      // setPromptInput(''); // Clear input after successful submission
+    } catch (err: any) {      
+      setError(err.message || "Failed to submit prompt or generate image.");
+      // Toast is handled within submitPlayerPrompt for credit errors etc.
     } finally {
       setIsSubmitting(false);
     }
   };
+  
+  const loading = gameLoading || authLoading;
 
-  if (gameLoading) {
+  if (loading) {
     return <div className="flex justify-center items-center h-64"><LoadingSpinner className="w-12 h-12" /> <span className="ml-2">Loading game...</span></div>;
   }
 
   if (!game) {
     return <Alert variant="destructive"><AlertCircle className="h-4 w-4" /><AlertTitle>Error</AlertTitle><AlertDescription>Game data could not be loaded. Please try again later.</AlertDescription></Alert>;
   }
+   if (!currentUser || !userProfile) {
+     // This case should ideally be handled by AuthGuard, but as a fallback:
+    return <Alert variant="destructive"><AlertCircle className="h-4 w-4" /><AlertTitle>Access Denied</AlertTitle><AlertDescription>You must be logged in to access this page.</AlertDescription></Alert>;
+  }
   
   const isRoundActive = game.status === 'active';
-  const hasPlayerSubmitted = !!(playerKey === 'playerOne' ? game.playerOnePrompt : game.playerTwoPrompt);
+  const hasPlayerSubmittedThisSlot = !!(playerKey === 'playerOne' ? game.playerOnePrompt : game.playerTwoPrompt);
 
   return (
     <div className="space-y-8">
       <Card className="shadow-xl">
         <CardHeader>
-          <CardTitle className="font-headline text-3xl">{playerName}'s Turn</CardTitle>
-          <CardDescription>The current central prompt is: <strong className="text-primary">{game.prompt || "Waiting for admin..."}</strong></CardDescription>
+          <div className="flex justify-between items-start">
+            <div>
+              <CardTitle className="font-headline text-3xl">{playerName}'s Turn</CardTitle>
+              <CardDescription>The current central prompt is: <strong className="text-primary">{game.prompt || "Waiting for admin..."}</strong></CardDescription>
+            </div>
+            <div className="text-right">
+                <div className="flex items-center gap-1 text-sm text-primary">
+                    <Zap className="h-4 w-4"/> Credits: <span className="font-bold text-lg">{userProfile.credits}</span>
+                </div>
+                <p className="text-xs text-muted-foreground">1 credit per image</p>
+            </div>
+          </div>
+
           {!isRoundActive && game.status === 'waiting' && (
             <Alert variant="default" className="mt-2 bg-secondary">
               <AlertCircle className="h-4 w-4" />
@@ -108,12 +144,21 @@ export default function PlayerPromptForm({ playerKey, playerName }: PlayerPrompt
               </AlertDescription>
             </Alert>
           )}
-           {isRoundActive && hasPlayerSubmitted && !currentImage && !isSubmitting && (
+           {isRoundActive && hasPlayerSubmittedThisSlot && !currentImage && !isSubmitting && (
              <Alert variant="default" className="mt-2 bg-blue-500/10 border-blue-500/50">
                 <AlertCircle className="h-4 w-4 text-blue-500" />
                 <AlertTitle>Prompt Submitted!</AlertTitle>
                 <AlertDescription>
-                Your prompt has been submitted. Waiting for the image to generate. You can edit and resubmit if needed before the image appears.
+                Your prompt for {playerName} has been submitted. Waiting for the image to generate. You can edit and resubmit if needed before the image appears (this will use another credit).
+                </AlertDescription>
+            </Alert>
+           )}
+           {isRoundActive && userProfile.credits <= 0 && (
+             <Alert variant="destructive" className="mt-2">
+                <AlertCircle className="h-4 w-4" />
+                <AlertTitle>Out of Credits!</AlertTitle>
+                <AlertDescription>
+                  You have no credits left. You cannot generate new images until you get more credits.
                 </AlertDescription>
             </Alert>
            )}
@@ -121,7 +166,7 @@ export default function PlayerPromptForm({ playerKey, playerName }: PlayerPrompt
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-6">
             <div>
-              <Label htmlFor="prompt-input" className="text-lg">Your Creative Prompt</Label>
+              <Label htmlFor="prompt-input" className="text-lg">Your Creative Prompt for {playerName}</Label>
               <Textarea
                 id="prompt-input"
                 value={promptInput}
@@ -129,7 +174,7 @@ export default function PlayerPromptForm({ playerKey, playerName }: PlayerPrompt
                 placeholder="e.g., A futuristic cityscape at sunset, with flying cars..."
                 rows={4}
                 className="mt-1 text-base"
-                disabled={isSubmitting || !isRoundActive}
+                disabled={isSubmitting || !isRoundActive || userProfile.credits <= 0}
                 aria-describedby="prompt-help"
               />
               <p id="prompt-help" className="text-sm text-muted-foreground mt-1">
@@ -140,20 +185,20 @@ export default function PlayerPromptForm({ playerKey, playerName }: PlayerPrompt
             <Button 
               type="submit" 
               className="w-full text-lg py-6" 
-              disabled={!promptInput.trim() || isSubmitting || !isRoundActive}
+              disabled={!promptInput.trim() || isSubmitting || !isRoundActive || userProfile.credits <= 0}
             >
-              {isSubmitting ? <><LoadingSpinner className="mr-2" /> Submitting & Generating...</> : 'Submit Prompt & Generate Image'}
+              {isSubmitting ? <><LoadingSpinner className="mr-2" /> Submitting & Generating...</> : 'Submit Prompt & Generate Image (1 Credit)'}
             </Button>
           </form>
         </CardContent>
       </Card>
 
       <ImageCard
-        playerName="Your Submission Preview"
-        finalPrompt={finalSubmittedPrompt} // Show the submitted prompt
-        typingPrompt={promptInput} // Show current input as typing prompt for immediate feedback
+        playerName={`Your Submission Preview (${playerName})`}
+        finalPrompt={finalSubmittedPrompt} 
+        typingPrompt={isRoundActive ? promptInput : undefined} 
         imageUrl={currentImage}
-        isGenerating={isSubmitting || (hasPlayerSubmitted && !currentImage)} // Generating if submitting OR submitted but no image yet
+        isGenerating={isSubmitting || (hasPlayerSubmittedThisSlot && !currentImage && isRoundActive)} 
         cardClassName="bg-card/50"
         imagesRevealed={true} // Player always sees their own image attempts
         isLiveTypingView={false} 

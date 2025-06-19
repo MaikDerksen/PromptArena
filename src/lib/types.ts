@@ -18,7 +18,14 @@ export interface Game {
   playerTwoTypingPrompt?: string;
   playerOneLastSeen?: Timestamp | Date | null;
   playerTwoLastSeen?: Timestamp | Date | null;
-  imagesRevealed?: boolean; // Changed from promptsRevealed
+  imagesRevealed?: boolean;
 }
 
 export type PlayerKey = "playerOne" | "playerTwo";
+
+export interface UserProfile {
+  uid: string;
+  email: string | null;
+  credits: number;
+  createdAt: Timestamp | Date | null;
+}

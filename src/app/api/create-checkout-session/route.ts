@@ -1,10 +1,9 @@
+
 // src/app/api/create-checkout-session/route.ts
 import { NextResponse, type NextRequest } from 'next/server';
 import { stripe } from '@/lib/stripe';
-import { auth as adminAuth } from 'firebase-admin'; // If using firebase-admin for backend auth
-import { getAuth } from 'firebase/auth'; // For client-side user, but for backend, different approach
-                                        // For this example, we'll trust the userId passed from client
-                                        // For production, you'd verify the user via a session token.
+// For this example, we'll trust the userId passed from client
+// For production, you'd verify the user via a session token or backend auth.
 
 // Get the base URL from environment variables for constructing success/cancel URLs
 const getBaseUrl = () => {

@@ -1,3 +1,4 @@
+
 // src/app/api/stripe-webhook/route.ts
 import { NextResponse, type NextRequest } from 'next/server';
 import Stripe from 'stripe';
@@ -10,10 +11,6 @@ export async function POST(req: NextRequest) {
   const rawBody = await req.text();
   const sig = req.headers.get('stripe-signature');
   
-  // Log headers for debugging
-  // console.log('Stripe webhook headers:', JSON.stringify(req.headers));
-  // console.log('Stripe signature:', sig);
-
   const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
 
   if (!webhookSecret) {
@@ -45,26 +42,32 @@ export async function POST(req: NextRequest) {
       const userId = session.client_reference_id || session.metadata?.firebaseUID;
       const creditsPurchasedString = session.metadata?.creditsPurchased;
 
-      if (userId && creditsPurchasedString) {
-        const creditsPurchased = parseInt(creditsPurchasedString, 10);
-        if (!isNaN(creditsPurchased) && creditsPurchased > 0) {
-          try {
-            const userDocRef = doc(db, 'users', userId);
-            await updateDoc(userDocRef, {
-              credits: increment(creditsPurchased)
-            });
-            console.log(`Successfully updated credits for user ${userId} by ${creditsPurchased}.`);
-          } catch (firestoreError: any) {
-            console.error(`Failed to update credits for user ${userId}: ${firestoreError.message}`);
-            // For a production app, you might want to retry this or flag for manual intervention
-            return NextResponse.json({ error: 'Failed to update user credits in database.' }, { status: 500 });
-          }
-        } else {
-            console.error('Invalid creditsPurchased value in session metadata:', creditsPurchasedString, 'for session:', session.id);
-        }
-      } else {
-        console.error('Missing userId or creditsPurchased in session metadata for session:', session.id);
-        // Log this for investigation, as credits cannot be applied without this info.
+      if (!userId) {
+        console.error('Critical Error: Missing userId (client_reference_id or metadata.firebaseUID) in checkout.session.completed event. Cannot update credits. Session ID:', session.id);
+        return NextResponse.json({ error: 'User ID not found in session. Cannot update credits.' }, { status: 400 });
+      }
+      if (!creditsPurchasedString) {
+        console.error('Critical Error: Missing creditsPurchased in metadata for checkout.session.completed event. Cannot update credits. Session ID:', session.id, 'UserId:', userId);
+        return NextResponse.json({ error: 'Credits purchased amount not found in session metadata.' }, { status: 400 });
+      }
+      
+      const creditsPurchased = parseInt(creditsPurchasedString, 10);
+
+      if (isNaN(creditsPurchased) || creditsPurchased <= 0) {
+        console.error('Invalid creditsPurchased value in session metadata:', creditsPurchasedString, 'for session:', session.id, 'UserId:', userId);
+        return NextResponse.json({ error: 'Invalid credits purchased amount.' }, { status: 400 });
+      }
+
+      try {
+        const userDocRef = doc(db, 'users', userId);
+        await updateDoc(userDocRef, {
+          credits: increment(creditsPurchased)
+        });
+        console.log(`Successfully updated credits for user ${userId} by ${creditsPurchased}.`);
+      } catch (firestoreError: any) {
+        console.error(`Failed to update credits for user ${userId}: ${firestoreError.message}`);
+        // For a production app, you might want to retry this or flag for manual intervention
+        return NextResponse.json({ error: 'Failed to update user credits in database.' }, { status: 500 });
       }
       break;
     

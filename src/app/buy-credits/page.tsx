@@ -87,7 +87,11 @@ function BuyCreditsPageContent() {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ priceId: pkg.stripePriceId, userId: userProfile.uid, creditsAmount: pkg.credits }),
+        body: JSON.stringify({ 
+            priceId: pkg.stripePriceId, 
+            userId: userProfile.uid, 
+            creditsAmount: pkg.credits // Pass the amount of credits to be stored in metadata
+        }),
       });
 
       if (!response.ok) {
@@ -105,7 +109,6 @@ function BuyCreditsPageContent() {
           toast({ title: 'Payment Error', description: error.message || "Could not redirect to Stripe.", variant: 'destructive' });
         }
         // If redirect is successful, user leaves the page.
-        // We might want to refresh user profile upon their return to success/cancel page or app focus.
       } else {
          throw new Error("Stripe.js failed to load.");
       }
@@ -118,13 +121,13 @@ function BuyCreditsPageContent() {
   };
   
   // Refresh user profile when component mounts or user changes,
-  // in case they are returning from Stripe.
+  // especially if they are returning from Stripe after a purchase.
   useEffect(() => {
-    if(userProfile){
+    if(userProfile?.uid){ // Check if userProfile and uid are available
         refreshUserProfile();
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [userProfile?.uid]); // Only re-run if UID changes to avoid loops
+  }, [userProfile?.uid]); // Re-run if UID changes 
 
 
   if (authLoading) {
@@ -162,7 +165,7 @@ function BuyCreditsPageContent() {
           <br />
           After a successful payment via Stripe, your credits will be updated once the payment is confirmed by our server via the webhook. This usually happens within a few moments.
           <br />
-          <strong>Note for Developers:</strong> The webhook for automatic credit updates (`/api/stripe-webhook`) MUST be fully implemented and tested for credits to be added reliably after purchase.
+          <strong>Note for Developers:</strong> The webhook for automatic credit updates (`/api/stripe-webhook`) MUST be fully implemented and tested with your `STRIPE_WEBHOOK_SECRET` for credits to be added reliably after purchase. For local testing, use the Stripe CLI.
         </AlertDescription>
       </Alert>
 
@@ -210,4 +213,3 @@ export default function BuyCreditsPage() {
         </AuthGuard>
     )
 }
-

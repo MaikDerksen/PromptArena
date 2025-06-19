@@ -43,11 +43,11 @@ export function useGame() {
         setGame({ id: docSnap.id, ...docSnap.data() } as Game);
       } else {
         try {
-          // Only attempt to initialize if no game doc exists
-          // This prevents re-initialization on every listener trigger if doc is deleted
-          if (!game) { 
-            await setDoc(gameDocRef, { ...defaultGameData, createdAt: serverTimestamp(), updatedAt: serverTimestamp() });
-          }
+          // Game document doesn't exist, try to create it.
+          // This part will run if the document is deleted or not yet created.
+          console.log("Game document not found, attempting to initialize...");
+          await setDoc(gameDocRef, { ...defaultGameData, createdAt: serverTimestamp(), updatedAt: serverTimestamp() });
+          // After setting, onSnapshot should trigger again with the new data from Firestore listener.
         } catch (e: any) {
           console.error("Error initializing game:", e);
           setError("Failed to initialize game data.");
@@ -63,7 +63,7 @@ export function useGame() {
     });
 
     return () => unsubscribe();
-  }, [toast, game]); // Added game to dependency array to handle re-initialization case
+  }, [toast]); // Removed 'game' from dependency array
 
   const updateGameData = useCallback(async (data: Partial<Game>) => {
     if (!currentUser) { // Ensure user is logged in for most updates
@@ -200,7 +200,7 @@ export function useGame() {
        await updateDoc(gameDocRef, { [promptField]: "", [lastSeenField]: serverTimestamp(), updatedAt: serverTimestamp() });
       throw e;
     }
-  }, [currentUser, userProfile, updateGameData, toast, refreshUserProfile]); // Added refreshUserProfile
+  }, [currentUser, userProfile, toast, refreshUserProfile, updateGameData]); // Added updateGameData as it's used indirectly by submitPlayerPrompt
   
   const updateGameStatus = useCallback(async (status: GameStatus) => {
     // Admin action

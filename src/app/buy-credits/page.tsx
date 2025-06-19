@@ -22,7 +22,7 @@ interface CreditPackage {
   price: string;
   description: string;
   icon: JSX.Element;
-  stripePriceId: string; // Add your Stripe Price ID here
+  stripePriceId: string; // This should be a Stripe Price ID (e.g., price_xxxxxxxxxxxxxx)
 }
 
 // IMPORTANT: Replace these stripePriceId values with YOUR ACTUAL STRIPE PRICE IDs
@@ -35,7 +35,7 @@ const creditPackages: CreditPackage[] = [
     price: '$1.99',
     description: 'A small boost to get you going.',
     icon: <Coins className="w-8 h-8 text-primary" />,
-    stripePriceId: 'price_YOUR_STARTER_PACK_PRICE_ID', // Replace!
+    stripePriceId: 'prod_SWr6WVWRceP18N', // User provided ID
   },
   {
     id: 'creator',
@@ -44,7 +44,7 @@ const creditPackages: CreditPackage[] = [
     price: '$7.99',
     description: 'Perfect for regular battlers.',
     icon: <ShoppingCart className="w-8 h-8 text-primary" />,
-    stripePriceId: 'price_YOUR_CREATOR_BUNDLE_PRICE_ID', // Replace!
+    stripePriceId: 'prod_SWr7CR7m80Zo8B', // User provided ID
   },
   {
     id: 'arena_master',
@@ -53,7 +53,7 @@ const creditPackages: CreditPackage[] = [
     price: '$19.99',
     description: 'Dominate the arena with plenty of credits!',
     icon: <CreditCard className="w-8 h-8 text-primary" />,
-    stripePriceId: 'price_YOUR_ARENA_MASTER_PRICE_ID', // Replace!
+    stripePriceId: 'prod_SWr8jg1IrI4SDU', // User provided ID
   },
 ];
 
@@ -67,8 +67,10 @@ function BuyCreditsPageContent() {
         toast({ title: "Login Required", description: "Please log in to purchase credits.", variant: "destructive"});
         return;
     }
-    if (!pkg.stripePriceId || pkg.stripePriceId.startsWith('price_YOUR_')) {
-        toast({ title: "Configuration Error", description: "Stripe Price ID for this package is not configured correctly.", variant: "destructive"});
+    // Basic check to see if it's still a placeholder, though user is providing new IDs.
+    // The main check should be if Stripe can use this ID.
+    if (!pkg.stripePriceId || pkg.stripePriceId.includes('_YOUR_') || pkg.stripePriceId.includes('price_YOUR_')) {
+        toast({ title: "Configuration Error", description: "Stripe Price ID for this package is not configured correctly. Please use actual Price IDs from your Stripe Dashboard.", variant: "destructive"});
         console.error("Stripe Price ID missing or placeholder for package:", pkg.name);
         return;
     }
@@ -138,11 +140,13 @@ function BuyCreditsPageContent() {
 
       <Alert variant="default" className="bg-yellow-500/10 border-yellow-600/50">
         <Info className="h-4 w-4 text-yellow-600" />
-        <AlertTitle className="text-yellow-700">Important: Credit Updates</AlertTitle>
+        <AlertTitle className="text-yellow-700">Important: Stripe IDs & Credit Updates</AlertTitle>
         <AlertDescription className="text-yellow-700">
-          After a successful payment via Stripe, your credits will be updated once the payment is confirmed by our server. This usually happens within a few moments. If you don't see your credits updated immediately, please wait a short while and refresh.
+          Please ensure the Stripe IDs used for packages are **Price IDs** (e.g., `price_xxxxxxxxxxxxxx`) from your Stripe Dashboard. Product IDs (`prod_...`) may not work correctly with the current Checkout integration.
           <br />
-          <strong>Note for Developers:</strong> The webhook for automatic credit updates (`/api/stripe-webhook`) is currently a stub. For production, it must be fully implemented to handle `checkout.session.completed` events and update Firestore.
+          After a successful payment via Stripe, your credits will be updated once the payment is confirmed by our server via the webhook. This usually happens within a few moments.
+          <br />
+          <strong>Note for Developers:</strong> The webhook for automatic credit updates (`/api/stripe-webhook`) MUST be fully implemented and tested for credits to be added reliably after purchase.
         </AlertDescription>
       </Alert>
 
@@ -162,7 +166,7 @@ function BuyCreditsPageContent() {
               <Button 
                 className="w-full text-lg py-3" 
                 onClick={() => handleBuyCredits(pkg)}
-                disabled={isProcessingPayment === pkg.id || !userProfile || pkg.stripePriceId.startsWith('price_YOUR_')}
+                disabled={isProcessingPayment === pkg.id || !userProfile || pkg.stripePriceId.includes('_YOUR_') || pkg.stripePriceId.includes('price_YOUR_')}
               >
                 {isProcessingPayment === pkg.id ? (
                   <><LoadingSpinner className="mr-2"/> Processing...</>
@@ -190,3 +194,4 @@ export default function BuyCreditsPage() {
         </AuthGuard>
     )
 }
+

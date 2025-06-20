@@ -11,8 +11,10 @@ import LoadingSpinner from '@/components/loading-spinner';
 import { CreditCard, Coins, ShoppingCart, Info } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { loadStripe } from '@stripe/stripe-js';
+import { db } from '@/lib/firebase'; // Import db
+import { collection, addDoc, onSnapshot, doc, type Unsubscribe } from 'firebase/firestore'; // Firebase imports
 
-// Ensure your Stripe publishable key is set in your .env file
+// Stripe publishable key is still needed for loadStripe, though not used directly for session creation now
 const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!);
 
 interface CreditPackage {
@@ -22,11 +24,9 @@ interface CreditPackage {
   price: string;
   description: string;
   icon: JSX.Element;
-  stripePriceId: string; // This MUST be a Stripe Price ID (e.g., price_xxxxxxxxxxxxxx)
+  stripePriceId: string;
 }
 
-// IMPORTANT: Replace these stripePriceId values with YOUR ACTUAL STRIPE PRICE IDs
-// You need to create these products and prices in your Stripe Dashboard.
 const creditPackages: CreditPackage[] = [
   {
     id: 'starter',
@@ -35,7 +35,7 @@ const creditPackages: CreditPackage[] = [
     price: '$1.99',
     description: 'A small boost to get you going.',
     icon: <Coins className="w-8 h-8 text-primary" />,
-    stripePriceId: 'price_1RbnwjGbzNii5AZqgqVNogUv', 
+    stripePriceId: 'price_1RbnwjGbzNii5AZqgqVNogUv',
   },
   {
     id: 'creator',
@@ -44,7 +44,7 @@ const creditPackages: CreditPackage[] = [
     price: '$7.99',
     description: 'Perfect for regular battlers.',
     icon: <ShoppingCart className="w-8 h-8 text-primary" />,
-    stripePriceId: 'price_1RbnxKGbzNii5AZqRs0TCysD', 
+    stripePriceId: 'price_1RbnxKGbzNii5AZqRs0TCysD',
   },
   {
     id: 'arena_master',
@@ -53,82 +53,87 @@ const creditPackages: CreditPackage[] = [
     price: '$19.99',
     description: 'Dominate the arena with plenty of credits!',
     icon: <CreditCard className="w-8 h-8 text-primary" />,
-    stripePriceId: 'price_1Rbny7GbzNii5AZqalXjVAff', 
+    stripePriceId: 'price_1Rbny7GbzNii5AZqalXjVAff',
   },
 ];
 
 function BuyCreditsPageContent() {
   const { userProfile, loading: authLoading, refreshUserProfile } = useAuth();
   const { toast } = useToast();
-  const [isProcessingPayment, setIsProcessingPayment] = useState<string | null>(null); // Store ID of package being processed
+  const [isProcessingPayment, setIsProcessingPayment] = useState<string | null>(null);
 
   const handleBuyCredits = async (pkg: CreditPackage) => {
     if (!userProfile) {
-        toast({ title: "Login Required", description: "Please log in to purchase credits.", variant: "destructive"});
-        return;
+      toast({ title: "Login Required", description: "Please log in to purchase credits.", variant: "destructive" });
+      return;
     }
-    
+
     if (!pkg.stripePriceId || !pkg.stripePriceId.startsWith('price_')) {
-        toast({ 
-            title: "Configuration Error", 
-            description: `The Stripe ID for "${pkg.name}" (${pkg.stripePriceId}) does not look like a valid Price ID (e.g., price_xxxxxxxxxxxxxx). Please check your Stripe Dashboard.`, 
-            variant: "destructive",
-            duration: 10000 
-        });
-        console.error("Stripe Price ID for package:", pkg.name, "is likely incorrect:", pkg.stripePriceId);
-        return;
+      toast({
+        title: "Configuration Error",
+        description: `The Stripe ID for "${pkg.name}" is not a valid Price ID. Please check configuration.`,
+        variant: "destructive",
+        duration: 10000
+      });
+      return;
     }
 
     setIsProcessingPayment(pkg.id);
 
     try {
-      const response = await fetch('/api/create-checkout-session', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
+      const checkoutSessionCollectionRef = collection(db, 'users', userProfile.uid, 'checkout_sessions');
+      
+      const successUrl = `${window.location.origin}/checkout/success?session_id={CHECKOUT_SESSION_ID}`;
+      const cancelUrl = `${window.location.origin}/checkout/cancel`;
+
+      const docRef = await addDoc(checkoutSessionCollectionRef, {
+        price: pkg.stripePriceId,
+        success_url: successUrl,
+        cancel_url: cancelUrl,
+        mode: 'payment', // Important for one-time payments
+        client_reference_id: userProfile.uid, // For your records/webhook linking
+        metadata: { // For your custom webhook to update credits
+          firebaseUID: userProfile.uid,
+          creditsPurchased: pkg.credits.toString(),
         },
-        body: JSON.stringify({ 
-            priceId: pkg.stripePriceId, 
-            userId: userProfile.uid, 
-            creditsAmount: pkg.credits // Pass the amount of credits to be stored in metadata
-        }),
+        // The extension might also support collecting promotion codes, tax IDs etc.
+        // allow_promotion_codes: false, 
       });
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to create checkout session.');
-      }
-
-      const { sessionId } = await response.json();
-      const stripe = await stripePromise;
-
-      if (stripe) {
-        const { error } = await stripe.redirectToCheckout({ sessionId });
-        if (error) {
-          console.error('Stripe redirect error:', error);
-          toast({ title: 'Payment Error', description: error.message || "Could not redirect to Stripe.", variant: 'destructive' });
+      // Listen for changes on the document reference
+      const unsubscribe = onSnapshot(docRef, (snap) => {
+        const data = snap.data();
+        if (data?.error) {
+          toast({ title: 'Payment Error', description: data.error.message || "Could not initiate payment with Firebase extension.", variant: 'destructive' });
+          setIsProcessingPayment(null);
+          unsubscribe(); // Stop listening
         }
-        // If redirect is successful, user leaves the page.
-      } else {
-         throw new Error("Stripe.js failed to load.");
-      }
+        if (data?.url) {
+          // We have a Stripe Checkout URL, let's redirect.
+          window.location.assign(data.url);
+          // No need to setIsProcessingPayment(null) here as page will redirect
+          unsubscribe(); // Stop listening
+        }
+      }, (error) => {
+        console.error("Error listening to checkout session document:", error);
+        toast({ title: 'Payment Error', description: "Error processing payment request. Please try again.", variant: 'destructive' });
+        setIsProcessingPayment(null);
+        unsubscribe(); // Stop listening on error
+      });
+
     } catch (error: any) {
-      console.error('Payment initiation error:', error);
+      console.error('Error initiating checkout session via Firestore:', error);
       toast({ title: 'Payment Error', description: error.message || 'Could not initiate payment.', variant: 'destructive' });
-    } finally {
       setIsProcessingPayment(null);
     }
+    // Note: setIsProcessingPayment(null) is handled within onSnapshot callbacks or catch block for this flow
   };
-  
-  // Refresh user profile when component mounts or user changes,
-  // especially if they are returning from Stripe after a purchase.
-  useEffect(() => {
-    if(userProfile?.uid){ // Check if userProfile and uid are available
-        refreshUserProfile();
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [userProfile?.uid]); // Re-run if UID changes 
 
+  useEffect(() => {
+    if (userProfile?.uid) {
+      refreshUserProfile();
+    }
+  }, [userProfile?.uid, refreshUserProfile]);
 
   if (authLoading) {
     return (
@@ -139,7 +144,6 @@ function BuyCreditsPageContent() {
   }
 
   if (!userProfile) {
-    // This should ideally be caught by AuthGuard, but as a fallback
     return <p>Please log in to view and purchase credits.</p>;
   }
 
@@ -161,11 +165,11 @@ function BuyCreditsPageContent() {
         <Info className="h-4 w-4 text-yellow-600" />
         <AlertTitle className="text-yellow-700">Important: Stripe IDs & Credit Updates</AlertTitle>
         <AlertDescription className="text-yellow-700">
-          Please ensure the Stripe IDs used for packages are **Price IDs** (e.g., `price_xxxxxxxxxxxxxx`) from your Stripe Dashboard. Product IDs (`prod_...`) or Event IDs (`evt_...`) will not work correctly with this Checkout integration.
+          Checkout sessions are now created via the Firebase Stripe Extension.
           <br />
-          After a successful payment via Stripe, your credits will be updated once the payment is confirmed by our server via the webhook. This usually happens within a few moments.
+          After a successful payment via Stripe, your credits will be updated by our server webhook once the payment is confirmed. This usually happens within a few moments.
           <br />
-          <strong>Note for Developers:</strong> The webhook for automatic credit updates (`/api/stripe-webhook`) MUST be fully implemented and tested with your `STRIPE_WEBHOOK_SECRET` for credits to be added reliably after purchase. For local testing, use the Stripe CLI.
+          <strong>Note for Developers:</strong> Your custom webhook at (`/api/stripe-webhook`) MUST be correctly configured and listening for `checkout.session.completed` events from Stripe for credits to be added reliably after purchase.
         </AlertDescription>
       </Alert>
 
@@ -182,13 +186,13 @@ function BuyCreditsPageContent() {
               <p className="text-xl font-semibold">{pkg.price}</p>
             </CardContent>
             <CardFooter>
-              <Button 
-                className="w-full text-lg py-3" 
+              <Button
+                className="w-full text-lg py-3"
                 onClick={() => handleBuyCredits(pkg)}
-                disabled={isProcessingPayment === pkg.id || !userProfile }
+                disabled={isProcessingPayment === pkg.id || !userProfile}
               >
                 {isProcessingPayment === pkg.id ? (
-                  <><LoadingSpinner className="mr-2"/> Processing...</>
+                  <><LoadingSpinner className="mr-2" /> Processing...</>
                 ) : (
                   'Buy Now'
                 )}
@@ -207,9 +211,9 @@ function BuyCreditsPageContent() {
 }
 
 export default function BuyCreditsPage() {
-    return (
-        <AuthGuard>
-            <BuyCreditsPageContent />
-        </AuthGuard>
-    )
+  return (
+    <AuthGuard>
+      <BuyCreditsPageContent />
+    </AuthGuard>
+  )
 }

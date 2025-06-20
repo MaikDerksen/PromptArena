@@ -197,7 +197,7 @@ export default function PlayerPromptForm({ playerKey, playerName }: PlayerPrompt
         playerName={`Your Submission Preview (${playerName})`}
         finalPrompt={finalSubmittedPrompt || null} 
         typingPrompt={isRoundActive ? promptInput : undefined} 
-        imageUrl={currentImage}
+        imageUrl={currentImage || null}
         isGenerating={isSubmitting || (hasPlayerSubmittedThisSlot && !currentImage && isRoundActive)} 
         cardClassName="bg-card/50"
         imagesRevealed={true} // Player always sees their own image attempts

@@ -5,3 +5,24 @@ runConfig:
   # Increase this value if you'd like to automatically spin up
   # more instances in response to increased traffic.
   maxInstances: 1
+
+# Environment variables accessible to your application at runtime.
+# For secrets, it's best practice to use Google Cloud Secret Manager.
+environmentVariables:
+  # Example: NEXT_PUBLIC_APP_URL for your production domain
+  NEXT_PUBLIC_APP_URL: "https://your-production-domain.com" # Replace with your actual domain
+  # Stripe Publishable Key is public, so it can be set here
+  NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: "pk_live_YOUR_STRIPE_LIVE_PUBLISHABLE_KEY" # Replace with your actual live key
+
+# Secret environment variables fetched from Google Cloud Secret Manager.
+# You need to create these secrets in Secret Manager first and grant
+# the App Hosting service agent the "Secret Manager Secret Accessor" role.
+secretEnvironmentVariables:
+  - key: STRIPE_SECRET_KEY # The env var name your app uses
+    secret: STRIPE_LIVE_SECRET_KEY_ID # The ID of the secret in Secret Manager
+    # Optional: specify version, defaults to 'latest'
+    # version: "1" 
+  - key: STRIPE_WEBHOOK_SECRET
+    secret: STRIPE_LIVE_WEBHOOK_SECRET_ID
+  - key: GOOGLE_API_KEY
+    secret: GOOGLE_AI_API_KEY_ID

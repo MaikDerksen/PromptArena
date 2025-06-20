@@ -1,3 +1,4 @@
+
 'use server';
 
 /**
@@ -42,6 +43,11 @@ const generateImageFlow = ai.defineFlow(
       },
     });
 
-    return {imageUrl: media.url!};
+    if (!media || !media.url) {
+      throw new Error('Image generation failed or no image URL was returned.');
+    }
+
+    return {imageUrl: media.url};
   }
 );
+

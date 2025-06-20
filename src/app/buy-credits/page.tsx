@@ -14,7 +14,7 @@ import { loadStripe } from '@stripe/stripe-js';
 import { db } from '@/lib/firebase'; // Import db
 import { collection, addDoc, onSnapshot, doc, type Unsubscribe } from 'firebase/firestore'; // Firebase imports
 
-// Stripe publishable key is still needed for loadStripe, though not used directly for session creation now
+// Stripe publishable key is still needed for loadStripe
 const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!);
 
 interface CreditPackage {
@@ -24,7 +24,7 @@ interface CreditPackage {
   price: string;
   description: string;
   icon: JSX.Element;
-  stripePriceId: string;
+  stripePriceId: string; // Will be LIVE Price ID
 }
 
 const creditPackages: CreditPackage[] = [
@@ -32,28 +32,28 @@ const creditPackages: CreditPackage[] = [
     id: 'starter',
     name: 'Starter Pack',
     credits: 10,
-    price: '$1.99',
+    price: '$1.99', // Ensure this matches your live Stripe price
     description: 'A small boost to get you going.',
     icon: <Coins className="w-8 h-8 text-primary" />,
-    stripePriceId: 'price_1RbnwjGbzNii5AZqgqVNogUv',
+    stripePriceId: 'price_YOUR_LIVE_STARTER_PACK_PRICE_ID', // IMPORTANT: Replace with your LIVE Stripe Price ID
   },
   {
     id: 'creator',
     name: 'Creator Bundle',
     credits: 50,
-    price: '$7.99',
+    price: '$7.99', // Ensure this matches your live Stripe price
     description: 'Perfect for regular battlers.',
     icon: <ShoppingCart className="w-8 h-8 text-primary" />,
-    stripePriceId: 'price_1RbnxKGbzNii5AZqRs0TCysD',
+    stripePriceId: 'price_YOUR_LIVE_CREATOR_BUNDLE_PRICE_ID', // IMPORTANT: Replace with your LIVE Stripe Price ID
   },
   {
     id: 'arena_master',
     name: 'Arena Master Pack',
     credits: 150,
-    price: '$19.99',
+    price: '$19.99', // Ensure this matches your live Stripe price
     description: 'Dominate the arena with plenty of credits!',
     icon: <CreditCard className="w-8 h-8 text-primary" />,
-    stripePriceId: 'price_1Rbny7GbzNii5AZqalXjVAff',
+    stripePriceId: 'price_YOUR_LIVE_ARENA_MASTER_PRICE_ID', // IMPORTANT: Replace with your LIVE Stripe Price ID
   },
 ];
 
@@ -68,13 +68,14 @@ function BuyCreditsPageContent() {
       return;
     }
 
-    if (!pkg.stripePriceId || !pkg.stripePriceId.startsWith('price_')) {
+    if (!pkg.stripePriceId || !pkg.stripePriceId.startsWith('price_') || pkg.stripePriceId.includes('YOUR_LIVE_')) {
       toast({
         title: "Configuration Error",
-        description: `The Stripe ID for "${pkg.name}" is not a valid Price ID. Please check configuration.`,
+        description: `The Stripe ID for "${pkg.name}" is not configured for live payments. Please replace placeholder IDs.`,
         variant: "destructive",
         duration: 10000
       });
+      console.error("Stripe Price ID is a placeholder:", pkg.stripePriceId);
       return;
     }
 
@@ -83,42 +84,39 @@ function BuyCreditsPageContent() {
     try {
       const checkoutSessionCollectionRef = collection(db, 'users', userProfile.uid, 'checkout_sessions');
       
-      const successUrl = `${window.location.origin}/checkout/success?session_id={CHECKOUT_SESSION_ID}`;
-      const cancelUrl = `${window.location.origin}/checkout/cancel`;
+      // Ensure NEXT_PUBLIC_APP_URL is set in your production environment variables
+      const appBaseUrl = process.env.NEXT_PUBLIC_APP_URL || window.location.origin;
+      const successUrl = `${appBaseUrl}/checkout/success?session_id={CHECKOUT_SESSION_ID}`;
+      const cancelUrl = `${appBaseUrl}/checkout/cancel`;
 
       const docRef = await addDoc(checkoutSessionCollectionRef, {
-        price: pkg.stripePriceId,
+        price: pkg.stripePriceId, // This will be the LIVE Price ID
         success_url: successUrl,
         cancel_url: cancelUrl,
-        mode: 'payment', // Important for one-time payments
-        client_reference_id: userProfile.uid, // For your records/webhook linking
-        metadata: { // For your custom webhook to update credits
+        mode: 'payment',
+        client_reference_id: userProfile.uid,
+        metadata: {
           firebaseUID: userProfile.uid,
           creditsPurchased: pkg.credits.toString(),
         },
-        // The extension might also support collecting promotion codes, tax IDs etc.
-        // allow_promotion_codes: false, 
       });
 
-      // Listen for changes on the document reference
       const unsubscribe = onSnapshot(docRef, (snap) => {
         const data = snap.data();
         if (data?.error) {
           toast({ title: 'Payment Error', description: data.error.message || "Could not initiate payment with Firebase extension.", variant: 'destructive' });
           setIsProcessingPayment(null);
-          unsubscribe(); // Stop listening
+          unsubscribe();
         }
         if (data?.url) {
-          // We have a Stripe Checkout URL, let's redirect.
           window.location.assign(data.url);
-          // No need to setIsProcessingPayment(null) here as page will redirect
-          unsubscribe(); // Stop listening
+          unsubscribe();
         }
       }, (error) => {
         console.error("Error listening to checkout session document:", error);
         toast({ title: 'Payment Error', description: "Error processing payment request. Please try again.", variant: 'destructive' });
         setIsProcessingPayment(null);
-        unsubscribe(); // Stop listening on error
+        unsubscribe();
       });
 
     } catch (error: any) {
@@ -126,14 +124,14 @@ function BuyCreditsPageContent() {
       toast({ title: 'Payment Error', description: error.message || 'Could not initiate payment.', variant: 'destructive' });
       setIsProcessingPayment(null);
     }
-    // Note: setIsProcessingPayment(null) is handled within onSnapshot callbacks or catch block for this flow
   };
 
   useEffect(() => {
     if (userProfile?.uid) {
       refreshUserProfile();
     }
-  }, [userProfile?.uid, refreshUserProfile]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userProfile?.uid]); // refreshUserProfile can be memoized in useAuth if needed
 
   if (authLoading) {
     return (
@@ -165,11 +163,11 @@ function BuyCreditsPageContent() {
         <Info className="h-4 w-4 text-yellow-600" />
         <AlertTitle className="text-yellow-700">Important: Stripe IDs & Credit Updates</AlertTitle>
         <AlertDescription className="text-yellow-700">
-          Checkout sessions are now created via the Firebase Stripe Extension.
+          Checkout sessions are now created via the Firebase Stripe Extension using **LIVE** Stripe Product Prices.
           <br />
           After a successful payment via Stripe, your credits will be updated by our server webhook once the payment is confirmed. This usually happens within a few moments.
           <br />
-          <strong>Note for Developers:</strong> Your custom webhook at (`/api/stripe-webhook`) MUST be correctly configured and listening for `checkout.session.completed` events from Stripe for credits to be added reliably after purchase.
+          <strong>Note for Developers:</strong> Ensure your production webhook at (`/api/stripe-webhook`) is correctly configured in Stripe (Live mode) and listening for `checkout.session.completed` events for credits to be added.
         </AlertDescription>
       </Alert>
 
@@ -189,7 +187,7 @@ function BuyCreditsPageContent() {
               <Button
                 className="w-full text-lg py-3"
                 onClick={() => handleBuyCredits(pkg)}
-                disabled={isProcessingPayment === pkg.id || !userProfile}
+                disabled={isProcessingPayment === pkg.id || !userProfile || pkg.stripePriceId.includes('YOUR_LIVE_')}
               >
                 {isProcessingPayment === pkg.id ? (
                   <><LoadingSpinner className="mr-2" /> Processing...</>

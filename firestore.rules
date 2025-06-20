@@ -1,47 +1,52 @@
+
 rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Game data: Allow read for anyone, write only for authenticated users (admin controls)
+    // Game data:
+    // - Allow anyone to read game data.
+    // - Allow only authenticated users whose UID is in the admin list to write game data.
+    //   IMPORTANT: Replace 'ADMIN_UID_1_HERE', 'ADMIN_UID_2_HERE' with actual admin Firebase UIDs.
     match /games/{gameId} {
       allow read: if true;
-      allow write: if request.auth != null; // Simplistic: any logged-in user can write.
-                                          // For production, you'd restrict this to admins.
+      allow write: if request.auth != null && request.auth.uid in ['ADMIN_UID_1_HERE', 'ADMIN_UID_2_HERE']; // Restrict to admin UIDs
     }
 
-    // User profiles and Stripe extension data:
+    // User profiles:
+    // - Allow users to create their own profile upon signup.
+    // - Allow users to read and update their own profile.
+    // - Disallow users from reading or writing other users' profiles.
     match /users/{userId} {
-      // Existing user profile permissions
       allow read, update: if request.auth != null && request.auth.uid == userId;
-      allow create: if request.auth != null; // Allows user to create their own doc on signup
+      allow create: if request.auth != null && request.auth.uid == userId; // Ensure user can only create their own doc
 
-      // Stripe extension subcollections for the user
-      // Users can read/write their own checkout_sessions
-      match /checkout_sessions/{sessionId} {
-        allow read, write: if request.auth != null && request.auth.uid == userId;
+      // Stripe Firebase Extension specific rules:
+      // Users can create and read their own checkout_sessions.
+      match /checkout_sessions/{id} {
+        allow read, write, create: if request.auth.uid == userId;
       }
-      // Users can read their own subscriptions
-      match /subscriptions/{subscriptionId} {
-        allow read: if request.auth != null && request.auth.uid == userId;
+      // Users can read their own subscriptions.
+      match /subscriptions/{id} {
+        allow read: if request.auth.uid == userId;
       }
-      // Users can read their own payments
-      match /payments/{paymentId} {
-        allow read: if request.auth != null && request.auth.uid == userId;
+      // Users can read their own payment history.
+      match /payments/{id} {
+        allow read: if request.auth.uid == userId;
       }
     }
 
-    // Stripe extension products data (publicly readable as per extension example)
-    // Products and their prices are typically publicly readable
+    // Stripe Firebase Extension specific rules for products and prices:
+    // Products and their prices are typically publicly readable.
     match /products/{productId} {
       allow read: if true;
 
       match /prices/{priceId} {
         allow read: if true;
       }
-
+      // If you use tax_rates synced from Stripe, make them readable.
       match /tax_rates/{taxRateId} {
-        allow read: if true; // Or restrict if needed, but often public
+        allow read: if true;
       }
     }
   }

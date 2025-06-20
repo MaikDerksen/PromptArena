@@ -195,7 +195,7 @@ export default function PlayerPromptForm({ playerKey, playerName }: PlayerPrompt
 
       <ImageCard
         playerName={`Your Submission Preview (${playerName})`}
-        finalPrompt={finalSubmittedPrompt} 
+        finalPrompt={finalSubmittedPrompt || null} 
         typingPrompt={isRoundActive ? promptInput : undefined} 
         imageUrl={currentImage}
         isGenerating={isSubmitting || (hasPlayerSubmittedThisSlot && !currentImage && isRoundActive)} 

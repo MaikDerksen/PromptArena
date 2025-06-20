@@ -8,7 +8,7 @@ runConfig:
 
 # Non-secret environment variables accessible to your application at runtime.
 environmentVariables:
-  # This will be your default Firebase App Hosting URL.
+  # This will be your default Firebase App Hosting URL for your primary project.
   # You can update this later if you configure a custom domain.
   NEXT_PUBLIC_APP_URL: "https://promptarena-aed1c.web.app"
 
@@ -25,4 +25,6 @@ secretEnvironmentVariables:
   - key: GOOGLE_API_KEY
     secret: google-ai-api-key              # The ID of the secret in Secret Manager
 
-    
+# Firebase project-specific configurations (FIREBASE_CONFIG, FIREBASE_WEBAPP_CONFIG)
+# are automatically injected by Firebase App Hosting during build and runtime.
+# You do not need to define them here if your backend is correctly linked to your Firebase project.

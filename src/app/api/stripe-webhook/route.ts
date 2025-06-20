@@ -2,14 +2,26 @@
 // src/app/api/stripe-webhook/route.ts
 import { NextResponse, type NextRequest } from 'next/server';
 import type Stripe from 'stripe';
-import { getStripeClient } from '@/lib/stripe'; 
+import { getStripeClient } from '@/lib/stripe';
 import { db } from '@/lib/firebase';
 import { doc, updateDoc, increment } from 'firebase/firestore';
 
+// The webhookSecret is still read from process.env at the module level,
+// as it's needed for the stripe.webhooks.constructEvent call.
+// This should be fine as long as it's defined in the build/runtime environment.
 const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
 
 export async function POST(req: NextRequest) {
-  const stripe = getStripeClient(); // Initialize Stripe client here
+  // Read STRIPE_SECRET_KEY here, only at runtime inside the handler
+  const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
+
+  if (!stripeSecretKey) {
+    console.error('STRIPE WEBHOOK ERROR: STRIPE_SECRET_KEY is not configured in the environment.');
+    // Return 500 because this is a server configuration issue.
+    return NextResponse.json({ error: 'Server configuration error: Stripe secret key not set.' }, { status: 500 });
+  }
+
+  const stripe = getStripeClient(stripeSecretKey); // Pass the key to the client initializer
   console.log('STRIPE WEBHOOK: Received request to /api/stripe-webhook');
 
   if (!webhookSecret) {
@@ -72,6 +84,8 @@ export async function POST(req: NextRequest) {
       console.log(`STRIPE WEBHOOK: Successfully updated credits for user ${userId}. Added ${creditsPurchased} credits.`);
     } catch (dbError: any) {
       console.error(`STRIPE WEBHOOK ERROR: Failed to update user credits in Firestore for user ${userId}: ${dbError.message}`);
+      // Acknowledge webhook, but signal server-side issue with processing.
+      // Depending on retry strategy, Stripe might retry. For credit updates, this is usually acceptable.
       return NextResponse.json({ error: 'Firestore update failed but webhook acknowledged.' }, { status: 200 });
     }
   } else {

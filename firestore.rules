@@ -1,33 +1,48 @@
-
 rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Game data: public read, authenticated write for updates.
+    // Game data: Allow read for anyone, write only for authenticated users (admin controls)
     match /games/{gameId} {
-      allow read: if true; // Viewers, players, admin can read game state.
-      allow create: if request.auth != null; // Allow authenticated users to initialize game if not present.
-      allow update: if request.auth != null; // Authenticated users (players, admin) can update.
-                                          // More granular control (e.g. only admin sets central prompt)
-                                          // would require checking request.auth.uid against specific admin UIDs
-                                          // or using custom claims.
-      allow delete: if false; // Game document should not be deleted.
+      allow read: if true;
+      allow write: if request.auth != null; // Simplistic: any logged-in user can write.
+                                          // For production, you'd restrict this to admins.
     }
 
-    // User profiles: users can read and update their own profiles.
+    // User profiles and Stripe extension data:
     match /users/{userId} {
-      allow read: if request.auth != null && request.auth.uid == userId;
-      allow create: if request.auth != null && request.auth.uid == userId; // For signup
-      allow update: if request.auth != null && request.auth.uid == userId; // For credit updates by user
-                  // Ideally, credit deduction should be handled by a Cloud Function for security.
-                  // Allowing client-side credit updates is simpler but less secure.
-      allow delete: if false; // Users should not delete their profiles directly.
+      // Existing user profile permissions
+      allow read, update: if request.auth != null && request.auth.uid == userId;
+      allow create: if request.auth != null; // Allows user to create their own doc on signup
+
+      // Stripe extension subcollections for the user
+      // Users can read/write their own checkout_sessions
+      match /checkout_sessions/{sessionId} {
+        allow read, write: if request.auth != null && request.auth.uid == userId;
+      }
+      // Users can read their own subscriptions
+      match /subscriptions/{subscriptionId} {
+        allow read: if request.auth != null && request.auth.uid == userId;
+      }
+      // Users can read their own payments
+      match /payments/{paymentId} {
+        allow read: if request.auth != null && request.auth.uid == userId;
+      }
     }
 
-    // Allow read access to genkit-state for development if needed, otherwise restrict
-    match /genkit-state/{document=**} {
-        allow read, write: if false; // Or adjust based on development needs
+    // Stripe extension products data (publicly readable as per extension example)
+    // Products and their prices are typically publicly readable
+    match /products/{productId} {
+      allow read: if true;
+
+      match /prices/{priceId} {
+        allow read: if true;
+      }
+
+      match /tax_rates/{taxRateId} {
+        allow read: if true; // Or restrict if needed, but often public
+      }
     }
   }
 }

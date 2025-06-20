@@ -1,10 +1,19 @@
+
 import Stripe from 'stripe';
 
-if (!process.env.STRIPE_SECRET_KEY) {
-  throw new Error('STRIPE_SECRET_KEY is not set in environment variables');
-}
+let stripeInstance: Stripe | null = null;
 
-export const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
-  apiVersion: '2024-06-20', // Use the latest API version
-  typescript: true,
-});
+export function getStripeClient(): Stripe {
+  if (!stripeInstance) {
+    const secretKey = process.env.STRIPE_SECRET_KEY;
+    if (!secretKey) {
+      // This error will now only be thrown if the key is missing when getStripeClient() is called at runtime.
+      throw new Error('STRIPE_SECRET_KEY is not set in environment variables');
+    }
+    stripeInstance = new Stripe(secretKey, {
+      apiVersion: '2024-06-20', 
+      typescript: true,
+    });
+  }
+  return stripeInstance;
+}

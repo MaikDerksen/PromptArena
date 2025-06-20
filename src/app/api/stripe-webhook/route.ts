@@ -1,14 +1,15 @@
 
 // src/app/api/stripe-webhook/route.ts
 import { NextResponse, type NextRequest } from 'next/server';
-import Stripe from 'stripe';
-import { stripe } from '@/lib/stripe'; // Your Stripe SDK instance
+import type Stripe from 'stripe';
+import { getStripeClient } from '@/lib/stripe'; 
 import { db } from '@/lib/firebase';
 import { doc, updateDoc, increment } from 'firebase/firestore';
 
 const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
 
 export async function POST(req: NextRequest) {
+  const stripe = getStripeClient(); // Initialize Stripe client here
   console.log('STRIPE WEBHOOK: Received request to /api/stripe-webhook');
 
   if (!webhookSecret) {
@@ -49,7 +50,6 @@ export async function POST(req: NextRequest) {
 
     if (!userId) {
       console.error('STRIPE WEBHOOK ERROR: User ID (client_reference_id or metadata.firebaseUID) not found in session.');
-      // Still return 200 to acknowledge, but log error
       return NextResponse.json({ error: 'User ID not found in session, but webhook acknowledged.' }, { status: 200 });
     }
     if (!creditsPurchasedString) {
@@ -72,7 +72,6 @@ export async function POST(req: NextRequest) {
       console.log(`STRIPE WEBHOOK: Successfully updated credits for user ${userId}. Added ${creditsPurchased} credits.`);
     } catch (dbError: any) {
       console.error(`STRIPE WEBHOOK ERROR: Failed to update user credits in Firestore for user ${userId}: ${dbError.message}`);
-      // Still return 200 to Stripe to acknowledge receipt, but log the internal error.
       return NextResponse.json({ error: 'Firestore update failed but webhook acknowledged.' }, { status: 200 });
     }
   } else {

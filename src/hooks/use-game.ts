@@ -200,7 +200,7 @@ export function useGame() {
        await updateDoc(gameDocRef, { [promptField]: "", [lastSeenField]: serverTimestamp(), updatedAt: serverTimestamp() });
       throw e;
     }
-  }, [currentUser, userProfile, toast, refreshUserProfile, updateGameData]); // Added updateGameData as it's used indirectly by submitPlayerPrompt
+  }, [currentUser, userProfile, toast, refreshUserProfile]);
   
   const updateGameStatus = useCallback(async (status: GameStatus) => {
     // Admin action

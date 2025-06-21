@@ -1,30 +1,10 @@
-# Settings to manage and configure a Firebase App Hosting backend.
-# https://firebase.google.com/docs/app-hosting/configure
 
-runConfig:
-  # Increase this value if you'd like to automatically spin up
-  # more instances in response to increased traffic.
-  maxInstances: 1
-
-# Non-secret environment variables accessible to your application at runtime.
-environmentVariables:
-  # This will be your default Firebase App Hosting URL for your primary project.
-  # You can update this later if you configure a custom domain.
-  NEXT_PUBLIC_APP_URL: "https://promptarena-aed1c.web.app"
-
-# Secret environment variables fetched from Google Cloud Secret Manager.
-# Ensure the App Hosting service agent has the "Secret Manager Secret Accessor" role
-# for EACH of these secrets in Google Cloud Secret Manager.
-secretEnvironmentVariables:
-  - key: NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY # The env var name your app uses
+env:
+  - variable: NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY # The env var name your app uses
     secret: stripe-live-publishable-key     # The ID of the secret in Secret Manager
-  - key: STRIPE_SECRET_KEY                   # The env var name your app uses
+  - variable: STRIPE_SECRET_KEY                   # The env var name your app uses
     secret: stripe-live-secret-key         # The ID of the secret in Secret Manager
-  - key: STRIPE_WEBHOOK_SECRET
+  - variable: STRIPE_WEBHOOK_SECRET
     secret: stripe-live-webhook-secret     # The ID of the secret in Secret Manager
-  - key: GOOGLE_API_KEY
+  - variable: GOOGLE_API_KEY
     secret: google-ai-api-key              # The ID of the secret in Secret Manager
-
-# Firebase project-specific configurations (FIREBASE_CONFIG, FIREBASE_WEBAPP_CONFIG)
-# are automatically injected by Firebase App Hosting during build and runtime.
-# You do not need to define them here if your backend is correctly linked to your Firebase project.

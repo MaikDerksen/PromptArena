@@ -6,28 +6,23 @@ import { getStripeClient } from '@/lib/stripe';
 import { db } from '@/lib/firebase';
 import { doc, updateDoc, increment } from 'firebase/firestore';
 
-// The webhookSecret is still read from process.env at the module level,
-// as it's needed for the stripe.webhooks.constructEvent call.
-// This should be fine as long as it's defined in the build/runtime environment.
-const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
-
 export async function POST(req: NextRequest) {
-  // Read STRIPE_SECRET_KEY here, only at runtime inside the handler
+  // Read BOTH secrets inside the handler at RUNTIME, not at the module level.
   const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
+  const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
 
   if (!stripeSecretKey) {
     console.error('STRIPE WEBHOOK ERROR: STRIPE_SECRET_KEY is not configured in the environment.');
-    // Return 500 because this is a server configuration issue.
     return NextResponse.json({ error: 'Server configuration error: Stripe secret key not set.' }, { status: 500 });
   }
-
-  const stripe = getStripeClient(stripeSecretKey); // Pass the key to the client initializer
-  console.log('STRIPE WEBHOOK: Received request to /api/stripe-webhook');
 
   if (!webhookSecret) {
     console.error('STRIPE WEBHOOK ERROR: Webhook secret not configured.');
     return NextResponse.json({ error: 'Webhook secret not configured.' }, { status: 500 });
   }
+
+  const stripe = getStripeClient(stripeSecretKey);
+  console.log('STRIPE WEBHOOK: Received request to /api/stripe-webhook');
 
   const rawBody = await req.text();
   const signature = req.headers.get('stripe-signature');

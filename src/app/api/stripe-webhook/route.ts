@@ -3,11 +3,10 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import type Stripe from 'stripe';
 import { getStripeClient } from '@/lib/stripe';
-import { db } from '@/lib/firebase';
-import { doc, updateDoc, increment } from 'firebase/firestore';
+// We will import firebase and firestore dynamically inside the POST handler
 
 export async function POST(req: NextRequest) {
-  // Read BOTH secrets inside the handler at RUNTIME, not at the module level.
+  // Read secrets at RUNTIME, inside the handler
   const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
   const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
 
@@ -72,6 +71,10 @@ export async function POST(req: NextRequest) {
 
     console.log(`STRIPE WEBHOOK: Attempting to update credits for user ${userId}. Adding ${creditsPurchased} credits.`);
     try {
+      // Dynamically import Firebase and Firestore only when needed at runtime
+      const { db } = await import('@/lib/firebase');
+      const { doc, updateDoc, increment } = await import('firebase/firestore');
+
       const userDocRef = doc(db, 'users', userId);
       await updateDoc(userDocRef, {
         credits: increment(creditsPurchased),

@@ -1,81 +1,99 @@
 
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import {
-  createUserWithEmailAndPassword,
-  signInWithEmailAndPassword,
-  sendPasswordResetEmail,
+  RecaptchaVerifier,
+  signInWithPhoneNumber,
+  type ConfirmationResult,
 } from 'firebase/auth';
 import { auth, db } from '@/lib/firebase';
 import { doc, setDoc, serverTimestamp, Timestamp } from 'firebase/firestore';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
 import type { UserProfile } from '@/lib/types';
-import { INITIAL_CREDITS } from '@/contexts/auth-context'; // Import initial credits
+import { INITIAL_CREDITS } from '@/contexts/auth-context';
+import PhoneInput from 'react-phone-number-input/react-hook-form-input';
+import 'react-phone-number-input/style.css';
+import { useForm, Controller } from 'react-hook-form';
+import LoadingSpinner from '@/components/loading-spinner';
+
+declare global {
+  interface Window {
+    recaptchaVerifier?: RecaptchaVerifier;
+    confirmationResult?: ConfirmationResult;
+  }
+}
 
 export default function AuthPage() {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [otpSent, setOtpSent] = useState(false);
+  const [otp, setOtp] = useState('');
   const router = useRouter();
   const { toast } = useToast();
+  const { control, handleSubmit: handlePhoneSubmit } = useForm<{ phone: string }>();
 
-  const handleSignUp = async (e: React.FormEvent) => {
-    e.preventDefault();
+
+  useEffect(() => {
+    // This function sets up the reCAPTCHA verifier
+    const setupRecaptcha = () => {
+      if (!window.recaptchaVerifier) {
+        window.recaptchaVerifier = new RecaptchaVerifier(auth, 'recaptcha-container', {
+          size: 'invisible',
+          callback: () => {
+            // reCAPTCHA solved, allow signInWithPhoneNumber.
+          },
+        });
+      }
+    };
+    setupRecaptcha();
+  }, []);
+
+  const onSendOtp = async (data: { phone: string }) => {
     setIsSubmitting(true);
     try {
-      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+      const verifier = window.recaptchaVerifier!;
+      const confirmationResult = await signInWithPhoneNumber(auth, data.phone, verifier);
+      window.confirmationResult = confirmationResult;
+      setOtpSent(true);
+      toast({ title: 'OTP Sent', description: 'Please check your phone for the verification code.' });
+    } catch (error: any) {
+      toast({ title: 'OTP Send Failed', description: error.message, variant: 'destructive' });
+      console.error(error);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const onVerifyOtp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!otp.trim()) return;
+    setIsSubmitting(true);
+    try {
+      const confirmationResult = window.confirmationResult;
+      if (!confirmationResult) {
+        throw new Error("No confirmation result found. Please request OTP again.");
+      }
+      const userCredential = await confirmationResult.confirm(otp);
       const user = userCredential.user;
 
       // Create user profile in Firestore
       const userProfile: UserProfile = {
         uid: user.uid,
-        email: user.email,
-        credits: INITIAL_CREDITS, 
+        phoneNumber: user.phoneNumber,
+        credits: INITIAL_CREDITS,
         createdAt: serverTimestamp() as Timestamp,
       };
-      await setDoc(doc(db, 'users', user.uid), userProfile);
+      await setDoc(doc(db, 'users', user.uid), userProfile, { merge: true });
 
-      toast({ title: 'Sign Up Successful', description: 'Welcome! You are now logged in.' });
+      toast({ title: 'Sign Up/Login Successful', description: 'Welcome! You are now logged in.' });
       router.push('/'); // Redirect to home or dashboard
     } catch (error: any) {
-      toast({ title: 'Sign Up Failed', description: error.message, variant: 'destructive' });
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  const handleLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsSubmitting(true);
-    try {
-      await signInWithEmailAndPassword(auth, email, password);
-      toast({ title: 'Login Successful', description: 'Welcome back!' });
-      router.push('/'); // Redirect to home or dashboard
-    } catch (error: any) {
-      toast({ title: 'Login Failed', description: error.message, variant: 'destructive' });
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-  
-  const handlePasswordReset = async () => {
-    if (!email) {
-      toast({ title: "Password Reset Failed", description: "Please enter your email address first.", variant: "destructive" });
-      return;
-    }
-    setIsSubmitting(true);
-    try {
-      await sendPasswordResetEmail(auth, email);
-      toast({ title: "Password Reset Email Sent", description: "Check your inbox for instructions to reset your password." });
-    } catch (error: any) {
-      toast({ title: "Password Reset Failed", description: error.message, variant: "destructive" });
+      toast({ title: 'Verification Failed', description: error.message, variant: 'destructive' });
     } finally {
       setIsSubmitting(false);
     }
@@ -84,95 +102,69 @@ export default function AuthPage() {
 
   return (
     <div className="flex justify-center items-center py-12">
-      <Tabs defaultValue="login" className="w-full max-w-md">
-        <TabsList className="grid w-full grid-cols-2">
-          <TabsTrigger value="login">Login</TabsTrigger>
-          <TabsTrigger value="signup">Sign Up</TabsTrigger>
-        </TabsList>
-        <TabsContent value="login">
-          <Card>
-            <CardHeader>
-              <CardTitle>Login</CardTitle>
-              <CardDescription>Access your PromptArena account.</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <form onSubmit={handleLogin} className="space-y-4">
-                <div>
-                  <Label htmlFor="login-email">Email</Label>
-                  <Input
-                    id="login-email"
-                    type="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    required
-                    disabled={isSubmitting}
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="login-password">Password</Label>
-                  <Input
-                    id="login-password"
-                    type="password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    required
-                    disabled={isSubmitting}
-                  />
-                </div>
-                <Button type="submit" className="w-full" disabled={isSubmitting}>
-                  {isSubmitting ? 'Logging in...' : 'Login'}
-                </Button>
-              </form>
-            </CardContent>
-             <CardFooter className="flex-col items-start gap-2">
-                <Button variant="link" onClick={handlePasswordReset} disabled={isSubmitting || !email} className="p-0 h-auto">
-                    Forgot Password?
-                </Button>
-            </CardFooter>
-          </Card>
-        </TabsContent>
-        <TabsContent value="signup">
-          <Card>
-            <CardHeader>
-              <CardTitle>Sign Up</CardTitle>
-              <CardDescription>Create a new PromptArena account.</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <form onSubmit={handleSignUp} className="space-y-4">
-                <div>
-                  <Label htmlFor="signup-email">Email</Label>
-                  <Input
-                    id="signup-email"
-                    type="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    required
-                    disabled={isSubmitting}
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="signup-password">Password</Label>
-                  <Input
-                    id="signup-password"
-                    type="password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    required
-                    minLength={6}
-                    disabled={isSubmitting}
-                  />
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  Upon sign up, you will receive {INITIAL_CREDITS} free credits to start!
-                </p>
-                <Button type="submit" className="w-full" disabled={isSubmitting}>
-                  {isSubmitting ? 'Signing up...' : 'Sign Up'}
-                </Button>
-              </form>
-            </CardContent>
-          </Card>
-        </TabsContent>
-      </Tabs>
+      <Card className="w-full max-w-md">
+        <CardHeader>
+          <CardTitle>Welcome to PromptArena</CardTitle>
+          <CardDescription>
+            {otpSent
+              ? 'Enter the code sent to your phone.'
+              : 'Sign up or log in with your phone number.'}
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {!otpSent ? (
+            <form onSubmit={handlePhoneSubmit(onSendOtp)} className="space-y-4">
+              <div>
+                <Label htmlFor="phone-input">Phone Number</Label>
+                <Controller
+                  name="phone"
+                  control={control}
+                  rules={{ required: true }}
+                  render={({ field }) => (
+                     <div className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-base ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium file:text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 md:text-sm">
+                        <PhoneInput
+                            {...field}
+                            id="phone-input"
+                            international
+                            defaultCountry="US"
+                            disabled={isSubmitting}
+                        />
+                     </div>
+                  )}
+                />
+              </div>
+              <p className="text-xs text-muted-foreground">
+                First-time users will receive {INITIAL_CREDITS} free credits!
+              </p>
+              <Button type="submit" className="w-full" disabled={isSubmitting}>
+                {isSubmitting ? <LoadingSpinner className="mr-2" /> : 'Send Verification Code'}
+              </Button>
+            </form>
+          ) : (
+            <form onSubmit={onVerifyOtp} className="space-y-4">
+              <div>
+                <Label htmlFor="otp-input">Verification Code</Label>
+                <Input
+                  id="otp-input"
+                  type="text"
+                  value={otp}
+                  onChange={(e) => setOtp(e.target.value)}
+                  required
+                  disabled={isSubmitting}
+                  placeholder="Enter 6-digit code"
+                />
+              </div>
+              <Button type="submit" className="w-full" disabled={isSubmitting}>
+                {isSubmitting ? 'Verifying...' : 'Verify & Log In'}
+              </Button>
+               <Button variant="link" onClick={() => setOtpSent(false)} disabled={isSubmitting} className="w-full">
+                Back to phone number entry
+              </Button>
+            </form>
+          )}
+        </CardContent>
+      </Card>
+      <div id="recaptcha-container"></div>
     </div>
   );
 }

@@ -36,10 +36,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (userDocSnap.exists()) {
           setUserProfile(userDocSnap.data() as UserProfile);
         } else {
-          // New user, create profile (e.g. after social sign-in or if doc was missed)
+          // New user, create profile (e.g. after phone sign-in or if doc was missed)
           const newUserProfile: UserProfile = {
             uid: user.uid,
-            email: user.email,
+            phoneNumber: user.phoneNumber,
             credits: INITIAL_CREDITS,
             createdAt: serverTimestamp() as Timestamp,
           };

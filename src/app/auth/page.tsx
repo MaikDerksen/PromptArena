@@ -71,7 +71,7 @@ export default function AuthPage() {
     formState: { errors: loginErrors },
   } = useForm<LoginSchema>({ resolver: zodResolver(loginSchema) });
 
-  // This useEffect is now only for cleanup when the component unmounts.
+  // This useEffect is only for cleanup when the component unmounts.
   useEffect(() => {
     return () => {
       if (window.recaptchaVerifier) {
@@ -84,12 +84,13 @@ export default function AuthPage() {
     setIsSubmitting(true);
     setFormError(null);
 
-    // Clear any lingering verifier instance before a new attempt
-    if (window.recaptchaVerifier) {
-      window.recaptchaVerifier.clear();
-    }
-
     try {
+      // Ensure there's a verifier on the window object.
+      // Clear any old one first to avoid conflicts.
+      if (window.recaptchaVerifier) {
+        window.recaptchaVerifier.clear();
+      }
+      
       const verifier = new RecaptchaVerifier(auth, 'recaptcha-container', {
         size: 'invisible',
       });
@@ -99,6 +100,7 @@ export default function AuthPage() {
 
       if (user) {
         toast({ title: 'Account Created', description: 'Now verifying your phone number...' });
+        // The verifier is passed to the linking function, which will render it.
         const confirmationResult = await linkWithPhoneNumber(user, data.phone, verifier);
         window.confirmationResult = confirmationResult;
         setShowOtpInput(true);

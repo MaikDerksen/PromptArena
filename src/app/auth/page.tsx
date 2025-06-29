@@ -17,9 +17,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { useToast } from '@/hooks/use-toast';
 import type { UserProfile } from '@/lib/types';
 import { INITIAL_CREDITS } from '@/contexts/auth-context';
-import PhoneInput from 'react-phone-number-input/react-hook-form-input';
+import PhoneInput from 'react-phone-number-input';
 import 'react-phone-number-input/style.css';
-import { useForm } from 'react-hook-form';
+import { useForm, Controller } from 'react-hook-form';
 import LoadingSpinner from '@/components/loading-spinner';
 
 declare global {
@@ -116,16 +116,21 @@ export default function AuthPage() {
             <form onSubmit={handlePhoneSubmit(onSendOtp)} className="space-y-4">
               <div>
                 <Label htmlFor="phone-input">Phone Number</Label>
-                <div className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-base ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium file:text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 md:text-sm">
-                  <PhoneInput
-                    name="phone"
-                    control={control}
-                    rules={{ required: true }}
-                    id="phone-input"
-                    defaultCountry="US"
-                    disabled={isSubmitting}
-                  />
-                </div>
+                <Controller
+                  name="phone"
+                  control={control}
+                  rules={{ required: true }}
+                  render={({ field }) => (
+                    <div className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-base ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium file:text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 md:text-sm">
+                      <PhoneInput
+                        {...field}
+                        id="phone-input"
+                        defaultCountry="US"
+                        disabled={isSubmitting}
+                      />
+                    </div>
+                  )}
+                />
               </div>
               <p className="text-xs text-muted-foreground">
                 First-time users will receive {INITIAL_CREDITS} free credits!

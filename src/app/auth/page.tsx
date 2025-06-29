@@ -71,38 +71,46 @@ export default function AuthPage() {
     formState: { errors: loginErrors },
   } = useForm<LoginSchema>({ resolver: zodResolver(loginSchema) });
 
-  // This useEffect is only for cleanup when the component unmounts.
+  // This useEffect handles the setup and cleanup of the RecaptchaVerifier.
+  // It ensures the verifier is ready when needed and cleaned up properly,
+  // preventing it from being destroyed by React re-renders.
   useEffect(() => {
+    window.recaptchaVerifier = new RecaptchaVerifier(auth, 'recaptcha-container', {
+      'size': 'invisible',
+    });
+  
+    // Cleanup function to be called when the component unmounts.
     return () => {
       if (window.recaptchaVerifier) {
         window.recaptchaVerifier.clear();
       }
     };
-  }, []);
+  }, []); // The empty dependency array ensures this runs only once on mount.
 
   const onSignUp: SubmitHandler<SignUpSchema> = async (data) => {
     setIsSubmitting(true);
     setFormError(null);
 
+    // Use the stable verifier instance that was created on mount.
+    const verifier = window.recaptchaVerifier;
+    if (!verifier) {
+      setFormError("reCAPTCHA verifier not initialized. Please refresh and try again.");
+      setIsSubmitting(false);
+      return;
+    }
+
     try {
-      // Ensure there's a verifier on the window object.
-      // Clear any old one first to avoid conflicts.
-      if (window.recaptchaVerifier) {
-        window.recaptchaVerifier.clear();
-      }
-      
-      const verifier = new RecaptchaVerifier(auth, 'recaptcha-container', {
-        size: 'invisible',
-      });
-      
       const userCredential = await createUserWithEmailAndPassword(auth, data.email, data.password);
       const user = userCredential.user;
 
       if (user) {
         toast({ title: 'Account Created', description: 'Now verifying your phone number...' });
-        // The verifier is passed to the linking function, which will render it.
+        
+        // Pass the stable verifier instance to the linking function.
         const confirmationResult = await linkWithPhoneNumber(user, data.phone, verifier);
         window.confirmationResult = confirmationResult;
+        
+        // This state change will now happen AFTER the async reCAPTCHA part is complete.
         setShowOtpInput(true);
       }
     } catch (error: any) {
@@ -261,6 +269,7 @@ export default function AuthPage() {
           )}
         </CardContent>
       </Card>
+      {/* This div must be present in the DOM for the invisible reCAPTCHA to work. */}
       <div id="recaptcha-container"></div>
     </div>
   );

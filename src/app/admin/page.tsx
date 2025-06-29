@@ -7,16 +7,17 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
-import { useGame } from '@/hooks/use-game';
+import { useGame, IMAGE_MODELS } from '@/hooks/use-game';
 import LoadingSpinner from '@/components/loading-spinner';
 import ImageCard from '@/components/image-card';
 import GameStatusBadge from '@/components/game-status-badge';
-import { AlertCircle, Edit3, Play, RotateCcw, SkipForward, Eye, UserCheck, UserX, Image as ImageIcon, CheckCircle, Wifi, HelpCircle, CreditCard } from 'lucide-react';
+import { AlertCircle, Edit3, Play, RotateCcw, SkipForward, Eye, UserCheck, UserX, Image as ImageIcon, CheckCircle, Wifi, HelpCircle, CreditCard, Settings } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Timestamp } from 'firebase/firestore';
 import { generateImage } from '@/ai/flows/generate-image'; 
 import AuthGuard from '@/components/auth-guard';
 import { useAuth } from '@/contexts/auth-context';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 const formatLastSeen = (lastSeen: Timestamp | Date | null): {text: string, icon: JSX.Element} => {
   if (!lastSeen) return { text: "Never active", icon: <UserX className="text-destructive h-4 w-4" /> };
@@ -34,7 +35,7 @@ const formatLastSeen = (lastSeen: Timestamp | Date | null): {text: string, icon:
 
 
 function AdminPageContent() {
-  const { game, loading: gameLoading, error: gameError, setCentralPrompt, updateGameStatus, revealImages, resetRound, resetGame } = useGame();
+  const { game, loading: gameLoading, error: gameError, setCentralPrompt, updateGameStatus, revealImages, resetRound, resetGame, setImageModel } = useGame();
   const { userProfile, loading: authLoading } = useAuth();
   const [newPrompt, setNewPrompt] = useState('');
   const [isSubmittingPrompt, setIsSubmittingPrompt] = useState(false);
@@ -147,31 +148,59 @@ function AdminPageContent() {
         </CardHeader>
       </Card>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2"><Edit3 className="text-primary"/> Set Central Prompt</CardTitle>
-          <CardDescription>Enter the central theme or idea for the current round.</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={handleSetPrompt} className="space-y-4">
-            <div>
-              <Label htmlFor="central-prompt">Central Prompt</Label>
-              <Textarea
-                id="central-prompt"
-                value={newPrompt}
-                onChange={(e) => setNewPrompt(e.target.value)}
-                placeholder="e.g., A mythical creature in a cyberpunk city"
-                rows={3}
-                className="mt-1"
-                disabled={isSubmittingPrompt}
-              />
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2"><Edit3 className="text-primary"/> Set Central Prompt</CardTitle>
+            <CardDescription>Enter the central theme or idea for the current round.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <form onSubmit={handleSetPrompt} className="space-y-4">
+              <div>
+                <Label htmlFor="central-prompt">Central Prompt</Label>
+                <Textarea
+                  id="central-prompt"
+                  value={newPrompt}
+                  onChange={(e) => setNewPrompt(e.target.value)}
+                  placeholder="e.g., A mythical creature in a cyberpunk city"
+                  rows={3}
+                  className="mt-1"
+                  disabled={isSubmittingPrompt}
+                />
+              </div>
+              <Button type="submit" disabled={isSubmittingPrompt || !newPrompt.trim()}>
+                {isSubmittingPrompt ? <><LoadingSpinner className="mr-2" /> Updating...</> : 'Set/Update Prompt'}
+              </Button>
+            </form>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2"><Settings className="text-primary"/> Image Generation Settings</CardTitle>
+            <CardDescription>Select the AI model for image generation. Higher quality models cost more credits.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2">
+              <Label htmlFor="image-model-select">Image Generation Model</Label>
+              <Select
+                value={game.imageModel || 'googleai/gemini-2.0-flash-preview-image-generation'}
+                onValueChange={(value) => setImageModel(value)}
+              >
+                <SelectTrigger id="image-model-select" className="w-full">
+                  <SelectValue placeholder="Select a model" />
+                </SelectTrigger>
+                <SelectContent>
+                  {Object.entries(IMAGE_MODELS).map(([modelId, { name, cost }]) => (
+                    <SelectItem key={modelId} value={modelId}>
+                      {name} ({cost} credit{cost > 1 ? 's' : ''})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
-            <Button type="submit" disabled={isSubmittingPrompt || !newPrompt.trim()}>
-              {isSubmittingPrompt ? <><LoadingSpinner className="mr-2" /> Updating...</> : 'Set/Update Prompt'}
-            </Button>
-          </form>
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
+      </div>
       
       <Card>
         <CardHeader>
@@ -283,4 +312,3 @@ export default function AdminPage() {
     </AuthGuard>
   );
 }
-

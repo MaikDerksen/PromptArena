@@ -10,6 +10,17 @@ import { useAuth } from '@/contexts/auth-context'; // Import useAuth
 
 const GAME_ID = "default-game"; 
 
+export const IMAGE_MODELS = {
+  'googleai/gemini-2.0-flash-preview-image-generation': {
+    name: 'Gemini 2.0 Flash (Fast)',
+    cost: 1,
+  },
+  'googleai/imagen-3-preview': {
+    name: 'Imagen 3 (High Quality)',
+    cost: 3,
+  },
+};
+
 const defaultGameData: Game = {
   id: GAME_ID,
   prompt: "A cat riding a unicorn on the moon",
@@ -25,6 +36,7 @@ const defaultGameData: Game = {
   playerOneLastSeen: null,
   playerTwoLastSeen: null,
   imagesRevealed: false,
+  imageModel: 'googleai/gemini-2.0-flash-preview-image-generation',
 };
 
 export function useGame() {
@@ -85,6 +97,11 @@ export function useGame() {
     await updateGameData({ prompt });
   }, [updateGameData]);
 
+  const setImageModel = useCallback(async (modelId: string) => {
+    await updateGameData({ imageModel: modelId });
+    toast({title: "Model Updated", description: "Image generation model has been changed."});
+  }, [updateGameData, toast]);
+
   const updatePlayerLastSeen = useCallback(async (player: PlayerKey) => {
     // This action doesn't strictly need auth for game data, but good practice
     if (!currentUser) return; 
@@ -134,8 +151,11 @@ export function useGame() {
       toast({ title: "Authentication Error", description: "You must be logged in to submit a prompt.", variant: "destructive" });
       throw new Error("User not authenticated");
     }
+    
+    const gameModel = game?.imageModel || 'googleai/gemini-2.0-flash-preview-image-generation';
+    const cost = IMAGE_MODELS[gameModel as keyof typeof IMAGE_MODELS]?.cost || 1;
 
-    if (userProfile.credits <= 0) {
+    if (userProfile.credits < cost) {
       toast({ title: "Insufficient Credits", description: "You do not have enough credits to generate an image.", variant: "destructive" });
       throw new Error("Insufficient credits");
     }
@@ -160,7 +180,7 @@ export function useGame() {
     // For now, we will not delete old images from storage to keep it simple, but this could be a future enhancement.
 
     try {
-      const { imageUrl: imageDataUri } = await genImageFlow({ prompt: playerPrompt });
+      const { imageUrl: imageDataUri } = await genImageFlow({ prompt: playerPrompt, model: gameModel });
 
       if (!imageDataUri) {
         throw new Error("Image generation returned no data.");
@@ -182,25 +202,26 @@ export function useGame() {
           throw "User document does not exist!";
         }
         const currentCredits = userDocSnap.data().credits;
-        if (currentCredits <= 0) {
-          throw "Insufficient credits (checked again in transaction).";
+        if (currentCredits < cost) {
+          throw "Insufficient credits. Please purchase more.";
         }
-        transaction.update(userDocRef, { credits: currentCredits - 1 });
+        transaction.update(userDocRef, { credits: currentCredits - cost });
         transaction.update(gameDocRef, { [imageField]: downloadURL, [lastSeenField]: serverTimestamp(), updatedAt: serverTimestamp() });
       });
       
       await refreshUserProfile(); // Refresh user profile to show updated credits
-      toast({ title: "Submission Successful", description: `Image generated! 1 credit used. Remaining: ${userProfile.credits - 1}` });
+      toast({ title: "Submission Successful", description: "Image generated!" });
       return downloadURL;
 
     } catch (e: any) {
       console.error(`Error processing image for ${player}:`, e);
-      toast({ title: "Image Processing Failed", description: e.message || "Could not generate or store image.", variant: "destructive" });
+      const errorMessage = e.message || "An unknown error occurred during image processing.";
+      toast({ title: "Image Processing Failed", description: errorMessage, variant: "destructive" });
       // Revert prompt submission in game doc if image processing failed
        await updateDoc(gameDocRef, { [promptField]: "", [lastSeenField]: serverTimestamp(), updatedAt: serverTimestamp() });
-      throw e;
+      throw new Error(errorMessage);
     }
-  }, [currentUser, userProfile, toast, refreshUserProfile]);
+  }, [currentUser, userProfile, toast, refreshUserProfile, game?.imageModel]);
   
   const updateGameStatus = useCallback(async (status: GameStatus) => {
     // Admin action
@@ -225,6 +246,7 @@ export function useGame() {
       playerTwoTypingPrompt: "",
       imagesRevealed: false, 
       status: "waiting",
+      imageModel: defaultGameData.imageModel,
       // Keep lastSeen null or update if needed by game logic for admin view
     };
     if (newCentralPrompt !== undefined && newCentralPrompt.trim() !== "") {
@@ -254,5 +276,5 @@ export function useGame() {
   }, [toast, game?.createdAt]);
 
 
-  return { game, loading, error, setCentralPrompt, submitPlayerPrompt, updatePlayerTypingPrompt, updateGameStatus, revealImages, resetRound, resetGame, updatePlayerLastSeen };
+  return { game, loading, error, setCentralPrompt, submitPlayerPrompt, updatePlayerTypingPrompt, updateGameStatus, revealImages, resetRound, resetGame, updatePlayerLastSeen, setImageModel };
 }

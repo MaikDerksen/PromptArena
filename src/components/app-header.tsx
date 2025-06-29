@@ -5,13 +5,14 @@ import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Gamepad2, LogIn, LogOut, CreditCard } from 'lucide-react';
 import { useAuth } from '@/contexts/auth-context';
-import { useRouter } from 'next/navigation';
+import { useRouter, usePathname } from 'next/navigation';
 import { useToast } from '@/hooks/use-toast';
 
 export default function AppHeader() {
   const { currentUser, userProfile, logout } = useAuth();
   const router = useRouter();
   const { toast } = useToast();
+  const pathname = usePathname();
 
   const handleLogout = async () => {
     try {
@@ -23,6 +24,8 @@ export default function AppHeader() {
     }
   };
 
+  const isAdminPage = pathname === '/admin';
+
   return (
     <header className="bg-card border-b border-border shadow-md">
       <div className="container mx-auto px-4 py-3 flex items-center justify-between">
@@ -33,12 +36,14 @@ export default function AppHeader() {
         <nav className="flex items-center gap-1 sm:gap-2">
           {currentUser && userProfile && (
             <>
-             <span className="text-sm text-muted-foreground mr-1 hidden sm:inline">Credits: {userProfile.credits}</span>
-             <Button variant="ghost" size="sm" asChild>
+              {isAdminPage && (
+                <span className="text-sm text-muted-foreground mr-1 hidden sm:inline">Credits: {userProfile.credits}</span>
+              )}
+              <Button variant="ghost" size="sm" asChild>
                 <Link href="/buy-credits" className="flex items-center gap-1">
                   <CreditCard className="h-4 w-4" /> Buy Credits
                 </Link>
-             </Button>
+              </Button>
             </>
           )}
           <Button variant="ghost" size="sm" asChild>

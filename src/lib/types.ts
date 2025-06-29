@@ -19,6 +19,7 @@ export interface Game {
   playerOneLastSeen?: Timestamp | Date | null;
   playerTwoLastSeen?: Timestamp | Date | null;
   imagesRevealed?: boolean;
+  imageModel?: string;
 }
 
 export type PlayerKey = "playerOne" | "playerTwo";

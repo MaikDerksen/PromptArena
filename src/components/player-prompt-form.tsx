@@ -68,10 +68,6 @@ export default function PlayerPromptForm({ playerKey, playerName }: PlayerPrompt
       toast({title: "Not Logged In", description: "You must be logged in to submit a prompt.", variant: "destructive"});
       return;
     }
-    if (userProfile.credits <= 0) {
-      toast({title: "No Credits", description: "You have no credits left to generate an image.", variant: "destructive"});
-      return;
-    }
 
     if (!promptInput.trim() || !game || game.status !== 'active') {
       if (game?.status !== 'active') {
@@ -118,12 +114,6 @@ export default function PlayerPromptForm({ playerKey, playerName }: PlayerPrompt
               <CardTitle className="font-headline text-3xl">{playerName}'s Turn</CardTitle>
               <CardDescription>The current central prompt is: <strong className="text-primary">{game.prompt || "Waiting for admin..."}</strong></CardDescription>
             </div>
-            <div className="text-right">
-                <div className="flex items-center gap-1 text-sm text-primary">
-                    <Zap className="h-4 w-4"/> Credits: <span className="font-bold text-lg">{userProfile.credits}</span>
-                </div>
-                <p className="text-xs text-muted-foreground">1 credit per image</p>
-            </div>
           </div>
 
           {!isRoundActive && game.status === 'waiting' && (
@@ -153,15 +143,6 @@ export default function PlayerPromptForm({ playerKey, playerName }: PlayerPrompt
                 </AlertDescription>
             </Alert>
            )}
-           {isRoundActive && userProfile.credits <= 0 && (
-             <Alert variant="destructive" className="mt-2">
-                <AlertCircle className="h-4 w-4" />
-                <AlertTitle>Out of Credits!</AlertTitle>
-                <AlertDescription>
-                  You have no credits left. You cannot generate new images until you get more credits.
-                </AlertDescription>
-            </Alert>
-           )}
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-6">
@@ -174,7 +155,7 @@ export default function PlayerPromptForm({ playerKey, playerName }: PlayerPrompt
                 placeholder="e.g., A futuristic cityscape at sunset, with flying cars..."
                 rows={4}
                 className="mt-1 text-base"
-                disabled={isSubmitting || !isRoundActive || userProfile.credits <= 0}
+                disabled={isSubmitting || !isRoundActive}
                 aria-describedby="prompt-help"
               />
               <p id="prompt-help" className="text-sm text-muted-foreground mt-1">
@@ -185,9 +166,9 @@ export default function PlayerPromptForm({ playerKey, playerName }: PlayerPrompt
             <Button 
               type="submit" 
               className="w-full text-lg py-6" 
-              disabled={!promptInput.trim() || isSubmitting || !isRoundActive || userProfile.credits <= 0}
+              disabled={!promptInput.trim() || isSubmitting || !isRoundActive}
             >
-              {isSubmitting ? <><LoadingSpinner className="mr-2" /> Submitting & Generating...</> : 'Submit Prompt & Generate Image (1 Credit)'}
+              {isSubmitting ? <><LoadingSpinner className="mr-2" /> Submitting & Generating...</> : 'Submit Prompt & Generate Image'}
             </Button>
           </form>
         </CardContent>

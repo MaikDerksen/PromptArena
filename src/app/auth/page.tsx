@@ -122,7 +122,6 @@ export default function AuthPage() {
                     control={control}
                     rules={{ required: true }}
                     id="phone-input"
-                    international
                     defaultCountry="US"
                     disabled={isSubmitting}
                   />

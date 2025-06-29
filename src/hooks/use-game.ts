@@ -37,6 +37,8 @@ const defaultGameData: Game = {
   playerTwoLastSeen: null,
   imagesRevealed: false,
   imageModel: 'googleai/gemini-2.0-flash-preview-image-generation',
+  roundDuration: 60,
+  roundEndsAt: null,
 };
 
 export function useGame() {
@@ -55,11 +57,8 @@ export function useGame() {
         setGame({ id: docSnap.id, ...docSnap.data() } as Game);
       } else {
         try {
-          // Game document doesn't exist, try to create it.
-          // This part will run if the document is deleted or not yet created.
           console.log("Game document not found, attempting to initialize...");
           await setDoc(gameDocRef, { ...defaultGameData, createdAt: serverTimestamp(), updatedAt: serverTimestamp() });
-          // After setting, onSnapshot should trigger again with the new data from Firestore listener.
         } catch (e: any) {
           console.error("Error initializing game:", e);
           setError("Failed to initialize game data.");
@@ -75,10 +74,10 @@ export function useGame() {
     });
 
     return () => unsubscribe();
-  }, [toast]); // Removed 'game' from dependency array
+  }, [toast]);
 
   const updateGameData = useCallback(async (data: Partial<Game>) => {
-    if (!currentUser) { // Ensure user is logged in for most updates
+    if (!currentUser) {
         toast({ title: "Authentication Error", description: "You must be logged in to update game data.", variant: "destructive" });
         return;
     }
@@ -93,7 +92,6 @@ export function useGame() {
   }, [toast, currentUser]);
 
   const setCentralPrompt = useCallback(async (prompt: string) => {
-    // Admin action, assumes admin is logged in (checked by AuthGuard on admin page)
     await updateGameData({ prompt });
   }, [updateGameData]);
 
@@ -103,11 +101,9 @@ export function useGame() {
   }, [updateGameData, toast]);
 
   const updatePlayerLastSeen = useCallback(async (player: PlayerKey) => {
-    // This action doesn't strictly need auth for game data, but good practice
     if (!currentUser) return; 
     const lastSeenField = player === "playerOne" ? "playerOneLastSeen" : "playerTwoLastSeen";
     try {
-      // Use Firestore updateDoc for this specific field without needing full updateGameData context
       const gameDocRef = doc(db, "games", GAME_ID);
       await updateDoc(gameDocRef, { [lastSeenField]: serverTimestamp(), updatedAt: serverTimestamp() });
     } catch (e) {
@@ -120,22 +116,12 @@ export function useGame() {
     if (!currentUser) return;
     const typingField = player === "playerOne" ? "playerOneTypingPrompt" : "playerTwoTypingPrompt";
     const lastSeenField = player === "playerOne" ? "playerOneLastSeen" : "playerTwoLastSeen";
-    const finalPromptField = player === "playerOne" ? "playerOnePrompt" : "playerTwoPrompt";
     
     const updates: Partial<Game> = {
       [typingField]: typingPrompt,
       [lastSeenField]: serverTimestamp(),
     };
-
-    // If typing prompt is cleared and the player hasn't submitted a final prompt yet, clear their final prompt too
-    // This is to ensure the viewer doesn't see a stale final prompt if player clears input before submitting
-    const currentGame = game; // Get current game state
-    if (typingPrompt === "" && currentGame && !currentGame[finalPromptField as keyof Game]) {
-       // Only clear final prompt if it was never set (i.e., no image generated for it)
-       // This might need more nuanced logic based on game flow
-    }
     
-    // Use Firestore updateDoc directly for responsiveness
     const gameDocRef = doc(db, "games", GAME_ID);
     try {
         await updateDoc(gameDocRef, { ...updates, updatedAt: serverTimestamp() });
@@ -143,7 +129,7 @@ export function useGame() {
         console.error("Error updating typing prompt:", e);
         toast({ title: "Error", description: "Failed to update typing progress.", variant: "destructive" });
     }
-  }, [currentUser, game, toast]);
+  }, [currentUser, toast]);
 
 
   const submitPlayerPrompt = useCallback(async (player: PlayerKey, playerPrompt: string) => {
@@ -165,20 +151,15 @@ export function useGame() {
     const typingField = player === "playerOne" ? "playerOneTypingPrompt" : "playerTwoTypingPrompt";
     const lastSeenField = player === "playerOne" ? "playerOneLastSeen" : "playerTwoLastSeen";
 
-    // Update game doc with the final prompt first
     const gameDocRef = doc(db, "games", GAME_ID);
     await updateDoc(gameDocRef, { 
       [promptField]: playerPrompt,
-      [imageField]: "", // Clear previous image for this player slot
+      [imageField]: "", 
       [typingField]: "", 
       [lastSeenField]: serverTimestamp(),
       updatedAt: serverTimestamp()
     });
     
-    // Attempt to delete old image if exists for this player slot from global game
-    // This is tricky because the image URL might be from a different user if multiple users play on same game doc
-    // For now, we will not delete old images from storage to keep it simple, but this could be a future enhancement.
-
     try {
       const { imageUrl: imageDataUri } = await genImageFlow({ prompt: playerPrompt, model: gameModel });
 
@@ -187,14 +168,12 @@ export function useGame() {
       }
       
       const imageFileName = `${player}-${Date.now()}.png`;
-      // User-specific storage path
       const imagePath = `user-images/${currentUser.uid}/default-game/${imageFileName}`;
       const sRef = storageRef(storage, imagePath);
       
       const uploadResult = await uploadString(sRef, imageDataUri, 'data_url');
       const downloadURL = await getDownloadURL(uploadResult.ref);
 
-      // Deduct credit and update image URL in Firestore Transaction
       const userDocRef = doc(db, 'users', currentUser.uid);
       await runTransaction(db, async (transaction) => {
         const userDocSnap = await transaction.get(userDocRef);
@@ -209,34 +188,44 @@ export function useGame() {
         transaction.update(gameDocRef, { [imageField]: downloadURL, [lastSeenField]: serverTimestamp(), updatedAt: serverTimestamp() });
       });
       
-      await refreshUserProfile(); // Refresh user profile to show updated credits
+      await refreshUserProfile();
       toast({ title: "Submission Successful", description: "Image generated!" });
       return downloadURL;
 
     } catch (e: any) {
-      console.error(`Error processing image for ${player}:`, e);
+      console.error(`Error in submitPlayerPrompt transaction for ${player}:`, e);
       const errorMessage = e.message || "An unknown error occurred during image processing.";
       toast({ title: "Image Processing Failed", description: errorMessage, variant: "destructive" });
-      // Revert prompt submission in game doc if image processing failed
-       await updateDoc(gameDocRef, { [promptField]: "", [lastSeenField]: serverTimestamp(), updatedAt: serverTimestamp() });
+      await updateDoc(gameDocRef, { [promptField]: "", [lastSeenField]: serverTimestamp(), updatedAt: serverTimestamp() });
       throw new Error(errorMessage);
     }
   }, [currentUser, userProfile, toast, refreshUserProfile, game?.imageModel]);
   
-  const updateGameStatus = useCallback(async (status: GameStatus) => {
-    // Admin action
+  const startRound = useCallback(async (durationInSeconds: number) => {
+    if (isNaN(durationInSeconds) || durationInSeconds <= 0) {
+        toast({title: "Invalid Duration", description: "Please select a valid round duration.", variant: "destructive"});
+        return;
+    }
+    const endTime = Timestamp.fromMillis(Date.now() + durationInSeconds * 1000);
+    await updateGameData({
+      status: 'active',
+      roundDuration: durationInSeconds,
+      roundEndsAt: endTime,
+    });
+    toast({title: "Round Started!", description: `Players have ${durationInSeconds} seconds to submit.`});
+  }, [updateGameData, toast]);
+
+  const updateGameStatus = useCallback(async (status: 'waiting' | 'completed') => {
     await updateGameData({ status });
     toast({title: "Game Status Updated", description: `Status set to ${status}.`});
   }, [updateGameData, toast]);
   
   const revealImages = useCallback(async () => { 
-    // Admin action
     await updateGameData({ imagesRevealed: true });
     toast({title: "Images Revealed", description: "Player images are now visible to viewers."});
   }, [updateGameData, toast]);
 
   const resetRound = useCallback(async (newCentralPrompt?: string) => {
-    // Admin action
     const updates: Partial<Game> = {
       playerOnePrompt: "",
       playerOneImage: "",
@@ -246,8 +235,8 @@ export function useGame() {
       playerTwoTypingPrompt: "",
       imagesRevealed: false, 
       status: "waiting",
-      imageModel: defaultGameData.imageModel,
-      // Keep lastSeen null or update if needed by game logic for admin view
+      roundEndsAt: null,
+      roundDuration: game?.roundDuration || defaultGameData.roundDuration,
     };
     if (newCentralPrompt !== undefined && newCentralPrompt.trim() !== "") {
       updates.prompt = newCentralPrompt;
@@ -258,15 +247,13 @@ export function useGame() {
     }
     await updateGameData(updates);
     toast({title: "Round Reset", description: "Player submissions cleared, ready for a new round."});
-  }, [updateGameData, toast, game?.prompt]);
+  }, [updateGameData, toast, game?.prompt, game?.roundDuration]);
 
   const resetGame = useCallback(async () => {
-    // Admin action
     const gameDocRef = doc(db, "games", GAME_ID);
     try {
       const existingCreatedAt = game?.createdAt || serverTimestamp(); 
       const gameDataToSet = { ...defaultGameData, createdAt: existingCreatedAt, updatedAt: serverTimestamp()};
-      // For global game reset, we don't need the currentUser check of updateGameData
       await setDoc(gameDocRef, gameDataToSet); 
       toast({ title: "Game Reset", description: "The entire game has been reset to defaults." });
     } catch (e:any) {
@@ -276,5 +263,5 @@ export function useGame() {
   }, [toast, game?.createdAt]);
 
 
-  return { game, loading, error, setCentralPrompt, submitPlayerPrompt, updatePlayerTypingPrompt, updateGameStatus, revealImages, resetRound, resetGame, updatePlayerLastSeen, setImageModel };
+  return { game, loading, error, setCentralPrompt, submitPlayerPrompt, updatePlayerTypingPrompt, startRound, updateGameStatus, revealImages, resetRound, resetGame, updatePlayerLastSeen, setImageModel };
 }

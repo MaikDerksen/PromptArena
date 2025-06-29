@@ -20,6 +20,10 @@ export interface Game {
   playerTwoLastSeen?: Timestamp | Date | null;
   imagesRevealed?: boolean;
   imageModel?: string;
+
+  // New timer fields
+  roundDuration?: number; // in seconds
+  roundEndsAt?: Timestamp | Date | null;
 }
 
 export type PlayerKey = "playerOne" | "playerTwo";

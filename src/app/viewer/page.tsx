@@ -8,6 +8,7 @@ import GameStatusBadge from '@/components/game-status-badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { AlertCircle, Tv } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import RoundTimer from '@/components/round-timer';
 
 export default function ViewerPage() {
   const { game, loading, error } = useGame();
@@ -33,9 +34,12 @@ export default function ViewerPage() {
           <CardTitle className="font-headline text-4xl flex items-center justify-center gap-3">
             <Tv className="w-10 h-10 text-primary"/> PromptArena Viewer
           </CardTitle>
-          <div className="flex items-center justify-center gap-2 mt-2">
-            <CardDescription className="text-lg">Game Status:</CardDescription>
-            <GameStatusBadge status={game.status} className="text-md px-4 py-1.5" />
+          <div className="flex items-center justify-center flex-wrap gap-x-4 gap-y-2 mt-2">
+            <div className="flex items-center gap-2">
+              <CardDescription className="text-lg">Status:</CardDescription>
+              <GameStatusBadge status={game.status} className="text-md px-4 py-1.5" />
+            </div>
+            {game.status === 'active' && <RoundTimer endTime={game.roundEndsAt} status={game.status} className="text-primary text-lg"/>}
           </div>
         </CardHeader>
         <CardContent>
@@ -49,7 +53,6 @@ export default function ViewerPage() {
         </CardContent>
       </Card>
 
-      {/* Removed items-start from grid to allow cards to stretch to equal height */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <ImageCard
           playerName="Player One"
@@ -76,4 +79,3 @@ export default function ViewerPage() {
     </div>
   );
 }
-

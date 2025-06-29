@@ -34,16 +34,15 @@ export default function AppHeader() {
           <h1 className="text-2xl font-headline font-bold">PromptArena</h1>
         </Link>
         <nav className="flex items-center gap-1 sm:gap-2">
-          {currentUser && userProfile && (
+          {currentUser && (
             <>
-              {isAdminPage && (
-                <span className="text-sm text-muted-foreground mr-1 hidden sm:inline">Credits: {userProfile.credits}</span>
+              {isAdminPage && userProfile && (
+                 <Button variant="ghost" size="sm" asChild>
+                    <Link href="/buy-credits" className="flex items-center gap-1">
+                      <CreditCard className="h-4 w-4" /> Credits: {userProfile.credits}
+                    </Link>
+                  </Button>
               )}
-              <Button variant="ghost" size="sm" asChild>
-                <Link href="/buy-credits" className="flex items-center gap-1">
-                  <CreditCard className="h-4 w-4" /> Buy Credits
-                </Link>
-              </Button>
             </>
           )}
           <Button variant="ghost" size="sm" asChild>

@@ -11,13 +11,14 @@ import { useGame, IMAGE_MODELS } from '@/hooks/use-game';
 import LoadingSpinner from '@/components/loading-spinner';
 import ImageCard from '@/components/image-card';
 import GameStatusBadge from '@/components/game-status-badge';
-import { AlertCircle, Edit3, Play, RotateCcw, SkipForward, Eye, UserCheck, UserX, Image as ImageIcon, CheckCircle, Wifi, HelpCircle, CreditCard, Settings } from 'lucide-react';
+import { AlertCircle, Edit3, Play, RotateCcw, SkipForward, Eye, UserCheck, UserX, Image as ImageIcon, CheckCircle, Wifi, HelpCircle, CreditCard, Settings, Timer } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Timestamp } from 'firebase/firestore';
 import { generateImage } from '@/ai/flows/generate-image'; 
 import AuthGuard from '@/components/auth-guard';
 import { useAuth } from '@/contexts/auth-context';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import RoundTimer from '@/components/round-timer';
 
 const formatLastSeen = (lastSeen: Timestamp | Date | null): {text: string, icon: JSX.Element} => {
   if (!lastSeen) return { text: "Never active", icon: <UserX className="text-destructive h-4 w-4" /> };
@@ -35,21 +36,26 @@ const formatLastSeen = (lastSeen: Timestamp | Date | null): {text: string, icon:
 
 
 function AdminPageContent() {
-  const { game, loading: gameLoading, error: gameError, setCentralPrompt, updateGameStatus, revealImages, resetRound, resetGame, setImageModel } = useGame();
+  const { game, loading: gameLoading, error: gameError, setCentralPrompt, startRound, updateGameStatus, revealImages, resetRound, resetGame, setImageModel } = useGame();
   const { userProfile, loading: authLoading } = useAuth();
+  
   const [newPrompt, setNewPrompt] = useState('');
   const [isSubmittingPrompt, setIsSubmittingPrompt] = useState(false);
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
   const [isRevealingImages, setIsRevealingImages] = useState(false);
+  const [isStartingRound, setIsStartingRound] = useState(false);
+
+  const [roundDuration, setRoundDuration] = useState('60');
 
   const [isTestingApi, setIsTestingApi] = useState(false);
   const [apiTestResult, setApiTestResult] = useState<{success: boolean, message: string, imageUrl?: string} | null>(null);
 
   useEffect(() => {
-    if (game?.prompt) {
+    if (game) {
       setNewPrompt(game.prompt);
+      setRoundDuration(game.roundDuration?.toString() || '60');
     }
-  }, [game?.prompt]);
+  }, [game]);
 
   const handleSetPrompt = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -61,8 +67,17 @@ function AdminPageContent() {
       setIsSubmittingPrompt(false);
     }
   };
+  
+  const handleStartRound = async () => {
+    setIsStartingRound(true);
+    try {
+      await startRound(parseInt(roundDuration, 10));
+    } finally {
+      setIsStartingRound(false);
+    }
+  };
 
-  const handleUpdateStatus = async (status: 'active' | 'waiting' | 'completed') => {
+  const handleUpdateStatus = async (status: 'waiting' | 'completed') => {
     setIsUpdatingStatus(true);
     try {
       await updateGameStatus(status);
@@ -97,9 +112,6 @@ function AdminPageContent() {
       const testPrompt = "Test image: a friendly robot waving";
       const result = await generateImage({ prompt: testPrompt });
       if (result.imageUrl) {
-        // Since image generation test does not consume user credits,
-        // we can directly show the image for testing purposes.
-        // If it were a credit-based action, we'd handle it differently.
         setApiTestResult({ success: true, message: "API connection successful! Image generated.", imageUrl: result.imageUrl });
       } else {
         setApiTestResult({ success: false, message: "API call succeeded but no image URL was returned." });
@@ -135,9 +147,12 @@ function AdminPageContent() {
         <CardHeader>
           <CardTitle className="font-headline text-3xl">Admin Control Panel</CardTitle>
           <div className="flex items-center justify-between mt-2">
-            <div className="flex items-center gap-2">
-              <CardDescription>Current Game Status:</CardDescription>
-              <GameStatusBadge status={game.status} />
+            <div className="flex items-center gap-4">
+              <div className="flex items-center gap-2">
+                <CardDescription>Status:</CardDescription>
+                <GameStatusBadge status={game.status} />
+              </div>
+              {game.status === 'active' && <RoundTimer endTime={game.roundEndsAt} status={game.status} className="text-primary" />}
             </div>
             <div className="flex items-center gap-2 text-sm">
                 <CreditCard className="h-5 w-5 text-primary"/>
@@ -177,10 +192,10 @@ function AdminPageContent() {
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2"><Settings className="text-primary"/> Image Generation Settings</CardTitle>
-            <CardDescription>Select the AI model for image generation. Higher quality models cost more credits.</CardDescription>
+            <CardDescription>Select the AI model and round duration. Higher quality models cost more credits.</CardDescription>
           </CardHeader>
-          <CardContent>
-            <div className="space-y-2">
+          <CardContent className="space-y-4">
+            <div>
               <Label htmlFor="image-model-select">Image Generation Model</Label>
               <Select
                 value={game.imageModel || 'googleai/gemini-2.0-flash-preview-image-generation'}
@@ -197,6 +212,20 @@ function AdminPageContent() {
                   ))}
                 </SelectContent>
               </Select>
+            </div>
+             <div>
+                <Label htmlFor="duration-select">Round Duration</Label>
+                <Select value={roundDuration} onValueChange={setRoundDuration} disabled={game.status === 'active'}>
+                    <SelectTrigger id="duration-select">
+                        <SelectValue placeholder="Set duration" />
+                    </SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="30">30 seconds</SelectItem>
+                        <SelectItem value="60">60 seconds</SelectItem>
+                        <SelectItem value="90">90 seconds</SelectItem>
+                        <SelectItem value="120">120 seconds</SelectItem>
+                    </SelectContent>
+                </Select>
             </div>
           </CardContent>
         </Card>
@@ -253,7 +282,7 @@ function AdminPageContent() {
           <CardDescription>Manage the game flow and player states.</CardDescription>
         </CardHeader>
         <CardContent className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          <Button onClick={() => handleUpdateStatus('active')} disabled={isUpdatingStatus || game.status === 'active'} className="w-full bg-green-600 hover:bg-green-700">
+          <Button onClick={handleStartRound} disabled={isStartingRound || game.status === 'active'} className="w-full bg-green-600 hover:bg-green-700">
             <Play className="mr-2 h-4 w-4"/> Start Round
           </Button>
           <Button onClick={() => handleUpdateStatus('waiting')} disabled={isUpdatingStatus || game.status === 'waiting'} className="w-full bg-yellow-500 hover:bg-yellow-600 text-black">

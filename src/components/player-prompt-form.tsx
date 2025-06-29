@@ -10,12 +10,13 @@ import LoadingSpinner from './loading-spinner';
 import type { PlayerKey } from '@/lib/types';
 import { useGame } from '@/hooks/use-game';
 import ImageCard from './image-card';
-import { AlertCircle, Zap } from 'lucide-react';
+import { AlertCircle, Clock, CheckCircle } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from './ui/alert';
 import { debounce } from '@/lib/utils';
-import { useAuth } from '@/contexts/auth-context'; // Import useAuth
+import { useAuth } from '@/contexts/auth-context';
 import { useToast } from '@/hooks/use-toast';
-
+import { Timestamp } from 'firebase/firestore';
+import RoundTimer from './round-timer';
 
 interface PlayerPromptFormProps {
   playerKey: PlayerKey;
@@ -24,7 +25,7 @@ interface PlayerPromptFormProps {
 
 export default function PlayerPromptForm({ playerKey, playerName }: PlayerPromptFormProps) {
   const { game, submitPlayerPrompt, updatePlayerTypingPrompt, updatePlayerLastSeen, loading: gameLoading } = useGame();
-  const { currentUser, userProfile, loading: authLoading } = useAuth(); // Get user
+  const { currentUser, userProfile, loading: authLoading } = useAuth();
   const { toast } = useToast();
   
   const [promptInput, setPromptInput] = useState('');
@@ -33,26 +34,30 @@ export default function PlayerPromptForm({ playerKey, playerName }: PlayerPrompt
 
   const finalSubmittedPrompt = playerKey === 'playerOne' ? game?.playerOnePrompt : game?.playerTwoPrompt;
   const currentImage = playerKey === 'playerOne' ? game?.playerOneImage : game?.playerTwoImage;
+  const hasSubmitted = !!finalSubmittedPrompt;
 
-  // Effect to update lastSeen when component mounts or user changes
   useEffect(() => {
     if (currentUser) {
       updatePlayerLastSeen(playerKey);
     }
   }, [playerKey, updatePlayerLastSeen, currentUser]);
+  
+  useEffect(() => {
+    // When a round is reset, the final prompt is cleared in Firestore.
+    // This effect listens for that change and clears the local text input.
+    if (!finalSubmittedPrompt) {
+      setPromptInput('');
+    }
+  }, [finalSubmittedPrompt]);
 
-
-  // Debounced function to update typing prompt in Firestore
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   const debouncedUpdateTypingPrompt = useCallback(
     debounce((player: PlayerKey, pInput: string) => {
-      if (currentUser && game?.status === 'active') { 
+      if (currentUser && game?.status === 'active' && !hasSubmitted) { 
         updatePlayerTypingPrompt(player, pInput);
       }
     }, 500), 
-    [updatePlayerTypingPrompt, game?.status, currentUser] 
+    [updatePlayerTypingPrompt, game?.status, currentUser, hasSubmitted] 
   );
-
 
   const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const newPrompt = e.target.value;
@@ -69,7 +74,7 @@ export default function PlayerPromptForm({ playerKey, playerName }: PlayerPrompt
       return;
     }
 
-    if (!promptInput.trim() || !game || game.status !== 'active') {
+    if (!promptInput.trim() || !game || !canSubmit) {
       if (game?.status !== 'active') {
         setError("Cannot submit prompt: The round is not active.");
       }
@@ -79,10 +84,8 @@ export default function PlayerPromptForm({ playerKey, playerName }: PlayerPrompt
     setIsSubmitting(true);
     try {
       await submitPlayerPrompt(playerKey, promptInput);
-      // setPromptInput(''); // Clear input after successful submission
     } catch (err: any) {      
       setError(err.message || "Failed to submit prompt or generate image.");
-      // Toast is handled within submitPlayerPrompt for credit errors etc.
     } finally {
       setIsSubmitting(false);
     }
@@ -98,26 +101,27 @@ export default function PlayerPromptForm({ playerKey, playerName }: PlayerPrompt
     return <Alert variant="destructive"><AlertCircle className="h-4 w-4" /><AlertTitle>Error</AlertTitle><AlertDescription>Game data could not be loaded. Please try again later.</AlertDescription></Alert>;
   }
    if (!currentUser || !userProfile) {
-     // This case should ideally be handled by AuthGuard, but as a fallback:
     return <Alert variant="destructive"><AlertCircle className="h-4 w-4" /><AlertTitle>Access Denied</AlertTitle><AlertDescription>You must be logged in to access this page.</AlertDescription></Alert>;
   }
   
   const isRoundActive = game.status === 'active';
-  const hasPlayerSubmittedThisSlot = !!(playerKey === 'playerOne' ? game.playerOnePrompt : game.playerTwoPrompt);
+  const isTimeUp = game.roundEndsAt ? new Date() > (game.roundEndsAt as Timestamp).toDate() : false;
+  const canSubmit = isRoundActive && !hasSubmitted && !isTimeUp;
 
   return (
     <div className="space-y-8">
       <Card className="shadow-xl">
         <CardHeader>
-          <div className="flex justify-between items-start">
+          <div className="flex justify-between items-center flex-wrap gap-2">
             <div>
               <CardTitle className="font-headline text-3xl">{playerName}'s Turn</CardTitle>
               <CardDescription>The current central prompt is: <strong className="text-primary">{game.prompt || "Waiting for admin..."}</strong></CardDescription>
             </div>
+            {isRoundActive && <RoundTimer endTime={game.roundEndsAt} status={game.status} className="text-lg text-primary" />}
           </div>
 
           {!isRoundActive && game.status === 'waiting' && (
-            <Alert variant="default" className="mt-2 bg-secondary">
+            <Alert variant="default" className="mt-4 bg-secondary">
               <AlertCircle className="h-4 w-4" />
               <AlertTitle>Round Not Active</AlertTitle>
               <AlertDescription>
@@ -126,7 +130,7 @@ export default function PlayerPromptForm({ playerKey, playerName }: PlayerPrompt
             </Alert>
           )}
            {game.status === 'completed' && (
-            <Alert variant="default" className="mt-2 bg-secondary">
+            <Alert variant="default" className="mt-4 bg-secondary">
               <AlertCircle className="h-4 w-4" />
               <AlertTitle>Round Completed</AlertTitle>
               <AlertDescription>
@@ -134,13 +138,22 @@ export default function PlayerPromptForm({ playerKey, playerName }: PlayerPrompt
               </AlertDescription>
             </Alert>
           )}
-           {isRoundActive && hasPlayerSubmittedThisSlot && !currentImage && !isSubmitting && (
-             <Alert variant="default" className="mt-2 bg-blue-500/10 border-blue-500/50">
-                <AlertCircle className="h-4 w-4 text-blue-500" />
-                <AlertTitle>Prompt Submitted!</AlertTitle>
+           {isRoundActive && hasSubmitted && (
+             <Alert variant="default" className="mt-4 bg-green-500/10 border-green-500/50">
+                <CheckCircle className="h-4 w-4 text-green-500" />
+                <AlertTitle>Prompt Submitted & Locked!</AlertTitle>
                 <AlertDescription>
-                Your prompt for {playerName} has been submitted. Waiting for the image to generate. You can edit and resubmit if needed before the image appears (this will use another credit).
+                  Your submission is locked in for this round. Good luck!
                 </AlertDescription>
+            </Alert>
+           )}
+           {isRoundActive && isTimeUp && !hasSubmitted && (
+            <Alert variant="destructive" className="mt-4">
+              <Clock className="h-4 w-4"/>
+              <AlertTitle>Time's Up!</AlertTitle>
+              <AlertDescription>
+                The time for this round has ended. You can no longer submit a prompt.
+              </AlertDescription>
             </Alert>
            )}
         </CardHeader>
@@ -155,20 +168,20 @@ export default function PlayerPromptForm({ playerKey, playerName }: PlayerPrompt
                 placeholder="e.g., A futuristic cityscape at sunset, with flying cars..."
                 rows={4}
                 className="mt-1 text-base"
-                disabled={isSubmitting || !isRoundActive}
+                disabled={isSubmitting || !canSubmit}
                 aria-describedby="prompt-help"
               />
               <p id="prompt-help" className="text-sm text-muted-foreground mt-1">
-                Describe the image you want the AI to generate based on the central prompt. Your typing progress is shared live with viewers!
+                Describe the image you want the AI to generate. You only get one submission per round!
               </p>
             </div>
             {error && <Alert variant="destructive"><AlertCircle className="h-4 w-4" /><AlertTitle>Submission Error</AlertTitle><AlertDescription>{error}</AlertDescription></Alert>}
             <Button 
               type="submit" 
               className="w-full text-lg py-6" 
-              disabled={!promptInput.trim() || isSubmitting || !isRoundActive}
+              disabled={!promptInput.trim() || isSubmitting || !canSubmit}
             >
-              {isSubmitting ? <><LoadingSpinner className="mr-2" /> Submitting & Generating...</> : 'Submit Prompt & Generate Image'}
+              {isSubmitting ? <><LoadingSpinner className="mr-2" /> Submitting & Generating...</> : 'Submit & Generate'}
             </Button>
           </form>
         </CardContent>
@@ -177,11 +190,11 @@ export default function PlayerPromptForm({ playerKey, playerName }: PlayerPrompt
       <ImageCard
         playerName={`Your Submission Preview (${playerName})`}
         finalPrompt={finalSubmittedPrompt || null} 
-        typingPrompt={isRoundActive ? promptInput : undefined} 
+        typingPrompt={isRoundActive && !hasSubmitted ? promptInput : undefined} 
         imageUrl={currentImage || null}
-        isGenerating={isSubmitting || (hasPlayerSubmittedThisSlot && !currentImage && isRoundActive)} 
+        isGenerating={isSubmitting || (hasSubmitted && !currentImage)} 
         cardClassName="bg-card/50"
-        imagesRevealed={true} // Player always sees their own image attempts
+        imagesRevealed={true}
         isLiveTypingView={false} 
       />
     </div>

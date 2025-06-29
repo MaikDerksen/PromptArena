@@ -71,36 +71,49 @@ export default function AuthPage() {
     formState: { errors: loginErrors },
   } = useForm<LoginSchema>({ resolver: zodResolver(loginSchema) });
 
+  // This useEffect is now only for cleanup when the component unmounts.
   useEffect(() => {
-    const setupRecaptcha = () => {
-      // Cleanup existing verifier if it's there
+    return () => {
       if (window.recaptchaVerifier) {
         window.recaptchaVerifier.clear();
       }
-      window.recaptchaVerifier = new RecaptchaVerifier(auth, 'recaptcha-container', {
-        size: 'invisible',
-        callback: () => { /* reCAPTCHA solved */ },
-      });
     };
-    setupRecaptcha();
   }, []);
 
   const onSignUp: SubmitHandler<SignUpSchema> = async (data) => {
     setIsSubmitting(true);
     setFormError(null);
+
+    // Clear any lingering verifier instance before a new attempt
+    if (window.recaptchaVerifier) {
+      window.recaptchaVerifier.clear();
+    }
+
     try {
+      const verifier = new RecaptchaVerifier(auth, 'recaptcha-container', {
+        size: 'invisible',
+      });
+      
       const userCredential = await createUserWithEmailAndPassword(auth, data.email, data.password);
       const user = userCredential.user;
 
       if (user) {
         toast({ title: 'Account Created', description: 'Now verifying your phone number...' });
-        const verifier = window.recaptchaVerifier!;
         const confirmationResult = await linkWithPhoneNumber(user, data.phone, verifier);
         window.confirmationResult = confirmationResult;
         setShowOtpInput(true);
       }
     } catch (error: any) {
-      setFormError(error.message);
+      console.error("Error during sign-up or phone linking:", error);
+      let errorMessage = "An unknown error occurred. Please try again.";
+      if (error.code === 'auth/invalid-phone-number') {
+        errorMessage = 'The phone number you entered is not valid. Please check and try again.';
+      } else if (error.code === 'auth/too-many-requests') {
+        errorMessage = 'We have blocked all requests from this device due to unusual activity. Try again later.';
+      } else if (error.code) {
+        errorMessage = error.message;
+      }
+      setFormError(errorMessage);
     } finally {
       setIsSubmitting(false);
     }
@@ -227,7 +240,6 @@ export default function AuthPage() {
                                   id="phone-input"
                                   defaultCountry="US"
                                   disabled={isSubmitting}
-                                  international={false}
                                   withCountryCallingCode
                               />
                            </div>

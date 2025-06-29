@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -75,8 +74,10 @@ export default function AuthPage() {
   // It ensures the verifier is ready when needed and cleaned up properly,
   // preventing it from being destroyed by React re-renders.
   useEffect(() => {
+    // Explicitly providing the site key makes the integration more robust.
     window.recaptchaVerifier = new RecaptchaVerifier(auth, 'recaptcha-container', {
       'size': 'invisible',
+      'sitekey': '6LdheHErAAAAAG7DXIn47ouyrvuG5DU7ni3a0g2r'
     });
   
     // Cleanup function to be called when the component unmounts.

@@ -59,7 +59,40 @@
     @apply bg-background text-foreground;
     font-feature-settings: "rlig" 1, "calt" 1;
   }
+  /* Overrides for react-phone-number-input to match dark theme */
   .PhoneInputInput {
-    @apply bg-transparent w-full focus:outline-none;
+    background: transparent;
+    color: inherit;
+    outline: none;
+  }
+  .PhoneInputCountry {
+    background-color: hsl(var(--popover));
+    color: hsl(var(--popover-foreground));
+    border-radius: var(--radius);
+    border: 1px solid hsl(var(--border));
+    box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+  }
+  .PhoneInputCountrySelect-menu {
+    background-color: hsl(var(--popover));
+    color: hsl(var(--popover-foreground));
+    border-radius: var(--radius);
+    border: 1px solid hsl(var(--border));
+    box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+  }
+  .PhoneInputCountryOption {
+    padding: 0.5rem;
+    cursor: pointer;
+  }
+  .PhoneInputCountryOption:hover {
+    background-color: hsl(var(--accent));
+    color: hsl(var(--accent-foreground));
+  }
+  .PhoneInputCountryOption--selected {
+    background-color: hsl(var(--primary));
+    color: hsl(var(--primary-foreground));
+  }
+  .PhoneInputCountryIcon-border {
+    background-color: transparent !important;
+    box-shadow: none !important;
   }
 }

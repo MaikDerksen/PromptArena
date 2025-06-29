@@ -59,40 +59,67 @@
     @apply bg-background text-foreground;
     font-feature-settings: "rlig" 1, "calt" 1;
   }
+
   /* Overrides for react-phone-number-input to match dark theme */
+  /* This targets the main input field for the phone number */
   .PhoneInputInput {
-    background: transparent;
-    color: inherit;
+    background: transparent !important;
+    color: inherit !important;
     outline: none;
+    border: none;
+    height: 100%;
+    font-size: inherit;
+    line-height: inherit;
   }
+  
+  /* This targets the container for the country select dropdown WHEN IT IS OPEN */
   .PhoneInputCountry {
-    background-color: hsl(var(--popover));
-    color: hsl(var(--popover-foreground));
+    background-color: hsl(var(--popover)) !important;
+    color: hsl(var(--popover-foreground)) !important;
     border-radius: var(--radius);
     border: 1px solid hsl(var(--border));
     box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
   }
+  
+  /* This targets the menu itself */
   .PhoneInputCountrySelect-menu {
-    background-color: hsl(var(--popover));
-    color: hsl(var(--popover-foreground));
+    background-color: hsl(var(--popover)) !important;
+    color: hsl(var(--popover-foreground)) !important;
     border-radius: var(--radius);
     border: 1px solid hsl(var(--border));
     box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
   }
+  
+  /* This targets an individual country option in the dropdown */
   .PhoneInputCountryOption {
     padding: 0.5rem;
     cursor: pointer;
   }
+  
+  /* Hover state for a country option */
   .PhoneInputCountryOption:hover {
-    background-color: hsl(var(--accent));
-    color: hsl(var(--accent-foreground));
+    background-color: hsl(var(--accent)) !important;
+    color: hsl(var(--accent-foreground)) !important;
   }
+  
+  /* Selected state for a country option */
   .PhoneInputCountryOption--selected {
-    background-color: hsl(var(--primary));
-    color: hsl(var(--primary-foreground));
+    background-color: hsl(var(--primary)) !important;
+    color: hsl(var(--primary-foreground)) !important;
   }
-  .PhoneInputCountryIcon-border {
+  
+  /* This removes an unwanted border around the flag icon */
+  .PhoneInputCountryIcon--border {
     background-color: transparent !important;
     box-shadow: none !important;
+  }
+
+  /* This targets the country select button (the flag) */
+  .PhoneInputCountrySelect {
+    color: inherit;
+  }
+
+  .PhoneInputCountrySelect:focus {
+    outline: none;
   }
 }

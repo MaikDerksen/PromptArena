@@ -30,8 +30,8 @@ export type PlayerKey = "playerOne" | "playerTwo";
 
 export interface UserProfile {
   uid: string;
-  email?: string | null; // Keep for legacy or future use
-  phoneNumber: string | null; // Add phone number
+  email: string; // Changed to required
+  phoneNumber: string | null;
   credits: number;
   createdAt: Timestamp | Date | null;
 }

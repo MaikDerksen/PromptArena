@@ -36,19 +36,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (userDocSnap.exists()) {
           setUserProfile(userDocSnap.data() as UserProfile);
         } else {
-          // New user, create profile (e.g. after phone sign-in or if doc was missed)
-          const newUserProfile: UserProfile = {
-            uid: user.uid,
-            phoneNumber: user.phoneNumber,
-            credits: INITIAL_CREDITS,
-            createdAt: serverTimestamp() as Timestamp,
-          };
-          try {
-            await setDoc(userDocRef, newUserProfile);
-            setUserProfile(newUserProfile);
-          } catch (error) {
-            console.error("Error creating user profile:", error);
-          }
+          // Profile might not be created yet if user is in the middle of OTP verification.
+          // We set it to null and let the AuthPage handle creating the doc upon success.
+          setUserProfile(null);
         }
       } else {
         setUserProfile(null);

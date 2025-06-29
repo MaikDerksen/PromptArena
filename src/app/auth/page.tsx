@@ -1,6 +1,7 @@
+
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   RecaptchaVerifier,
@@ -57,6 +58,7 @@ export default function AuthPage() {
   const [formError, setFormError] = useState<string | null>(null);
   const router = useRouter();
   const { toast } = useToast();
+  const recaptchaContainerRef = useRef<HTMLDivElement>(null);
 
   const {
     control: signUpControl,
@@ -70,21 +72,26 @@ export default function AuthPage() {
     formState: { errors: loginErrors },
   } = useForm<LoginSchema>({ resolver: zodResolver(loginSchema) });
 
-  // This useEffect handles the setup and cleanup of the RecaptchaVerifier.
-  // It ensures the verifier is ready when needed and cleaned up properly,
-  // preventing it from being destroyed by React re-renders.
   useEffect(() => {
-    // Explicitly providing the site key makes the integration more robust.
-    window.recaptchaVerifier = new RecaptchaVerifier(auth, 'recaptcha-container', {
-      'size': 'invisible',
-      'sitekey': '6LdheHErAAAAAG7DXIn47ouyrvuG5DU7ni3a0g2r'
-    });
-  
+    // This function will be called when the component mounts.
+    const initializeRecaptcha = () => {
+        // Ensure the container exists and we don't already have a verifier.
+        if (recaptchaContainerRef.current && !window.recaptchaVerifier) {
+            window.recaptchaVerifier = new RecaptchaVerifier(auth, recaptchaContainerRef.current, {
+                'size': 'invisible',
+                'sitekey': '6LdheHErAAAAAG7DXIn47ouyrvuG5DU7ni3a0g2r',
+            });
+        }
+    };
+
+    initializeRecaptcha();
+
     // Cleanup function to be called when the component unmounts.
     return () => {
-      if (window.recaptchaVerifier) {
-        window.recaptchaVerifier.clear();
-      }
+        if (window.recaptchaVerifier) {
+            window.recaptchaVerifier.clear();
+            window.recaptchaVerifier = undefined;
+        }
     };
   }, []); // The empty dependency array ensures this runs only once on mount.
 
@@ -92,7 +99,6 @@ export default function AuthPage() {
     setIsSubmitting(true);
     setFormError(null);
 
-    // Use the stable verifier instance that was created on mount.
     const verifier = window.recaptchaVerifier;
     if (!verifier) {
       setFormError("reCAPTCHA verifier not initialized. Please refresh and try again.");
@@ -107,11 +113,9 @@ export default function AuthPage() {
       if (user) {
         toast({ title: 'Account Created', description: 'Now verifying your phone number...' });
         
-        // Pass the stable verifier instance to the linking function.
         const confirmationResult = await linkWithPhoneNumber(user, data.phone, verifier);
         window.confirmationResult = confirmationResult;
         
-        // This state change will now happen AFTER the async reCAPTCHA part is complete.
         setShowOtpInput(true);
       }
     } catch (error: any) {
@@ -270,8 +274,10 @@ export default function AuthPage() {
           )}
         </CardContent>
       </Card>
-      {/* This div must be present in the DOM for the invisible reCAPTCHA to work. */}
-      <div id="recaptcha-container"></div>
+      {/* This div is the target for the invisible reCAPTCHA. */}
+      <div ref={recaptchaContainerRef}></div>
     </div>
   );
 }
+
+    

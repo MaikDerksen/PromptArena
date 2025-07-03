@@ -20,7 +20,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
 import type { UserProfile } from '@/lib/types';
 import { INITIAL_CREDITS } from '@/contexts/auth-context';
-import PhoneInput from 'react-phone-number-input';
+import PhoneInput from 'react-phone-number-input/react-hook-form';
 import 'react-phone-number-input/style.css';
 import { useForm, Controller, type SubmitHandler } from 'react-hook-form';
 import { z } from 'zod';
@@ -58,8 +58,7 @@ export default function AuthPage() {
   const [formError, setFormError] = useState<string | null>(null);
   const router = useRouter();
   const { toast } = useToast();
-  const recaptchaContainerRef = useRef<HTMLDivElement>(null);
-
+  
   const {
     control: signUpControl,
     handleSubmit: handleSignUpSubmit,
@@ -75,25 +74,28 @@ export default function AuthPage() {
   useEffect(() => {
     // This function will be called when the component mounts.
     const initializeRecaptcha = () => {
-        // Ensure the container exists and we don't already have a verifier.
-        if (recaptchaContainerRef.current && !window.recaptchaVerifier) {
-            window.recaptchaVerifier = new RecaptchaVerifier(auth, recaptchaContainerRef.current, {
-                'size': 'invisible',
-                'sitekey': '6LdheHErAAAAAG7DXIn47ouyrvuG5DU7ni3a0g2r',
-            });
+        // We must check for window.recaptchaVerifier because this may be called multiple times on HMR.
+        if (!window.recaptchaVerifier) {
+          // The container element must be in the DOM when this is called.
+          window.recaptchaVerifier = new RecaptchaVerifier(
+            auth,
+            'recaptcha-container', // Using the string ID of the div
+            {
+              size: 'invisible',
+              sitekey: '6LdheHErAAAAAG7DXIn47ouyrvuG5DU7ni3a0g2r',
+            }
+          );
         }
-    };
+      };
 
     initializeRecaptcha();
 
-    // Cleanup function to be called when the component unmounts.
     return () => {
-        if (window.recaptchaVerifier) {
-            window.recaptchaVerifier.clear();
-            window.recaptchaVerifier = undefined;
-        }
+      if (window.recaptchaVerifier) {
+        window.recaptchaVerifier.clear();
+      }
     };
-  }, []); // The empty dependency array ensures this runs only once on mount.
+  }, [auth]); // Pass auth to ensure it's available.
 
   const onSignUp: SubmitHandler<SignUpSchema> = async (data) => {
     setIsSubmitting(true);
@@ -125,7 +127,7 @@ export default function AuthPage() {
         errorMessage = 'The phone number you entered is not valid. Please check and try again.';
       } else if (error.code === 'auth/too-many-requests') {
         errorMessage = 'We have blocked all requests from this device due to unusual activity. Try again later.';
-      } else if (error.code) {
+      } else if (error.message) {
         errorMessage = error.message;
       }
       setFormError(errorMessage);
@@ -275,9 +277,7 @@ export default function AuthPage() {
         </CardContent>
       </Card>
       {/* This div is the target for the invisible reCAPTCHA. */}
-      <div ref={recaptchaContainerRef}></div>
+      <div id="recaptcha-container"></div>
     </div>
   );
 }
-
-    

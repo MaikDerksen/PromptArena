@@ -20,7 +20,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
 import type { UserProfile } from '@/lib/types';
 import { INITIAL_CREDITS } from '@/contexts/auth-context';
-import PhoneInput from 'react-phone-number-input/react-hook-form';
+import PhoneInput from 'react-phone-number-input';
 import 'react-phone-number-input/style.css';
 import { useForm, Controller, type SubmitHandler } from 'react-hook-form';
 import { z } from 'zod';
@@ -82,7 +82,6 @@ export default function AuthPage() {
             'recaptcha-container', // Using the string ID of the div
             {
               size: 'invisible',
-              sitekey: '6LdheHErAAAAAG7DXIn47ouyrvuG5DU7ni3a0g2r',
             }
           );
         }

@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   RecaptchaVerifier,
@@ -10,7 +10,8 @@ import {
   linkWithPhoneNumber,
   type ConfirmationResult,
 } from 'firebase/auth';
-import { auth, db } from '@/lib/firebase';
+import { db } from '@/lib/firebase';
+import { useAuth } from '@/contexts/auth-context';
 import { doc, setDoc, serverTimestamp, Timestamp } from 'firebase/firestore';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -58,7 +59,8 @@ export default function AuthPage() {
   const [formError, setFormError] = useState<string | null>(null);
   const router = useRouter();
   const { toast } = useToast();
-  
+  const { auth, loading: authLoading } = useAuth();
+
   const {
     control: signUpControl,
     handleSubmit: handleSignUpSubmit,
@@ -72,29 +74,27 @@ export default function AuthPage() {
   } = useForm<LoginSchema>({ resolver: zodResolver(loginSchema) });
 
   useEffect(() => {
-    // This function will be called when the component mounts.
-    const initializeRecaptcha = () => {
-        // We must check for window.recaptchaVerifier because this may be called multiple times on HMR.
-        if (!window.recaptchaVerifier) {
-          // The container element must be in the DOM when this is called.
-          window.recaptchaVerifier = new RecaptchaVerifier(
-            auth,
-            'recaptcha-container', // Using the string ID of the div
-            {
-              size: 'invisible',
-            }
-          );
-        }
-      };
+    if (authLoading || !auth) {
+      return;
+    }
 
-    initializeRecaptcha();
+    if (window.recaptchaVerifier) {
+      window.recaptchaVerifier.clear();
+    }
+    
+    const verifier = new RecaptchaVerifier(
+      auth,
+      'recaptcha-container',
+      {
+        size: 'invisible',
+      }
+    );
+    window.recaptchaVerifier = verifier;
 
     return () => {
-      if (window.recaptchaVerifier) {
-        window.recaptchaVerifier.clear();
-      }
+      verifier.clear();
     };
-  }, [auth]); // Pass auth to ensure it's available.
+  }, [auth, authLoading]);
 
   const onSignUp: SubmitHandler<SignUpSchema> = async (data) => {
     setIsSubmitting(true);
@@ -225,7 +225,7 @@ export default function AuthPage() {
                     <Input id="login-password" type="password" {...loginRegister('password')} placeholder="••••••••" />
                      {loginErrors.password && <p className="text-red-500 text-xs mt-1">{loginErrors.password.message}</p>}
                   </div>
-                  <Button type="submit" className="w-full" disabled={isSubmitting}>
+                  <Button type="submit" className="w-full" disabled={isSubmitting || authLoading}>
                     {isSubmitting ? <><LoadingSpinner className="mr-2" />Logging In...</> : 'Login'}
                   </Button>
                 </form>
@@ -266,7 +266,7 @@ export default function AuthPage() {
                   <p className="text-xs text-muted-foreground">
                     First-time users will receive {INITIAL_CREDITS} free credits!
                   </p>
-                  <Button type="submit" className="w-full" disabled={isSubmitting}>
+                  <Button type="submit" className="w-full" disabled={isSubmitting || authLoading}>
                     {isSubmitting ? <><LoadingSpinner className="mr-2" />Signing Up...</> : 'Sign Up'}
                   </Button>
                 </form>
@@ -275,7 +275,6 @@ export default function AuthPage() {
           )}
         </CardContent>
       </Card>
-      {/* This div is the target for the invisible reCAPTCHA. */}
       <div id="recaptcha-container"></div>
     </div>
   );

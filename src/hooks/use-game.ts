@@ -19,6 +19,14 @@ export const IMAGE_MODELS = {
     name: 'Imagen 3 (High Quality)',
     cost: 3,
   },
+  'imagen-4.0-generate-preview-06-06': {
+    name: 'Imagen 4 (Advanced)',
+    cost: 5,
+  },
+  'imagen-4.0-ultra-generate-preview-06-06': {
+    name: 'Imagen 4 Ultra (Top Tier)',
+    cost: 8,
+  },
 };
 
 const defaultGameData: Game = {

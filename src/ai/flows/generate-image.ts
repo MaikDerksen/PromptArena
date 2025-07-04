@@ -36,8 +36,10 @@ const generateImageFlow = ai.defineFlow(
     outputSchema: GenerateImageOutputSchema,
   },
   async input => {
-    const model =
-      input.model || 'gemini-2.0-flash-preview-image-generation';
+    if (!input.model) {
+      throw new Error('An image generation model must be provided.');
+    }
+    const model = input.model;
     let response;
 
     if (model === 'gemini-2.0-flash-preview-image-generation') {
@@ -49,9 +51,9 @@ const generateImageFlow = ai.defineFlow(
         },
       });
     } else {
-      // For other models like Imagen
+      // For other models like Imagen, ensure they are prefixed correctly for the provider
       response = await ai.generate({
-        model,
+        model: `googleai/${model}`,
         prompt: input.prompt,
         output: {format: 'media'},
       });

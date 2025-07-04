@@ -48,7 +48,7 @@ function AdminPageContent() {
   const [roundDuration, setRoundDuration] = useState('60');
 
   const [isTestingApi, setIsTestingApi] = useState(false);
-  const [apiTestResult, setApiTestResult] = useState<{success: boolean, message: string, imageUrl?: string} | null>(null);
+  const [apiTestResult, setApiTestResult] = useState<{success: boolean, message: string, imageUrl?: string, statusCode?: number} | null>(null);
 
   useEffect(() => {
     if (game) {
@@ -110,15 +110,20 @@ function AdminPageContent() {
     setApiTestResult(null);
     try {
       const testPrompt = "Test image: a friendly robot waving";
-      const result = await generateImage({ prompt: testPrompt });
+      // Use the currently selected model for the test
+      const result = await generateImage({ prompt: testPrompt, model: game.imageModel });
       if (result.imageUrl) {
-        setApiTestResult({ success: true, message: "API connection successful! Image generated.", imageUrl: result.imageUrl });
+        setApiTestResult({ success: true, message: "API connection successful! Image generated.", imageUrl: result.imageUrl, statusCode: 200 });
       } else {
-        setApiTestResult({ success: false, message: "API call succeeded but no image URL was returned." });
+        setApiTestResult({ success: false, message: "API call succeeded but no image URL was returned.", statusCode: 204 });
       }
     } catch (err: any) {
       console.error("API Test Error:", err);
-      setApiTestResult({ success: false, message: `API Test Failed: ${err.message || 'Unknown error'}` });
+      setApiTestResult({ 
+        success: false, 
+        message: `API Test Failed: ${err.message || 'Unknown error'}`,
+        statusCode: 500 // Generic server error, as we can't be sure of the exact code from the flow.
+      });
     } finally {
       setIsTestingApi(false);
     }
@@ -263,7 +268,10 @@ function AdminPageContent() {
           {apiTestResult && (
             <Alert variant={apiTestResult.success ? "default" : "destructive"} className={apiTestResult.success ? "bg-green-500/10 border-green-500/50" : ""}>
               {apiTestResult.success ? <CheckCircle className="h-4 w-4" /> : <AlertCircle className="h-4 w-4" />}
-              <AlertTitle>{apiTestResult.success ? "API Test Successful" : "API Test Failed"}</AlertTitle>
+              <AlertTitle className="flex items-center gap-2">
+                {apiTestResult.success ? "API Test Successful" : "API Test Failed"}
+                {apiTestResult.statusCode && <span className="font-mono text-xs bg-muted px-1.5 py-0.5 rounded">Status: {apiTestResult.statusCode}</span>}
+              </AlertTitle>
               <AlertDescription>{apiTestResult.message}</AlertDescription>
               {apiTestResult.imageUrl && (
                 <div className="mt-4">

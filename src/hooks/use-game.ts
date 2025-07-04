@@ -11,12 +11,12 @@ import { useAuth } from '@/contexts/auth-context'; // Import useAuth
 const GAME_ID = "default-game"; 
 
 export const IMAGE_MODELS = {
-  'vertexai/gemini-1.5-flash-preview-0514': {
+  'gemini-1.5-flash-preview-0514': {
     name: 'Gemini 1.5 Flash (Fast)',
     cost: 1,
   },
-  'vertexai/imagen-3.0-generate-002': {
-    name: 'Imagen 3 (High Quality)',
+  'imagen-2': {
+    name: 'Imagen 2 (High Quality)',
     cost: 3,
   },
 };
@@ -36,7 +36,7 @@ const defaultGameData: Game = {
   playerOneLastSeen: null,
   playerTwoLastSeen: null,
   imagesRevealed: false,
-  imageModel: 'vertexai/gemini-1.5-flash-preview-0514',
+  imageModel: 'gemini-1.5-flash-preview-0514',
   roundDuration: 60,
   roundEndsAt: null,
 };
@@ -138,7 +138,7 @@ export function useGame() {
       throw new Error("User not authenticated");
     }
     
-    const gameModel = game?.imageModel || 'vertexai/gemini-1.5-flash-preview-0514';
+    const gameModel = game?.imageModel || 'gemini-1.5-flash-preview-0514';
     const cost = IMAGE_MODELS[gameModel as keyof typeof IMAGE_MODELS]?.cost || 1;
 
     if (userProfile.credits < cost) {

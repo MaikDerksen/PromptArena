@@ -37,7 +37,7 @@ const generateImageFlow = ai.defineFlow(
   },
   async input => {
     const response = await ai.generate({
-      model: input.model || 'vertexai/imagen-3.0-generate-002',
+      model: input.model || 'gemini-1.5-flash-preview-0514',
       prompt: input.prompt,
       output: {format: 'media'},
     });

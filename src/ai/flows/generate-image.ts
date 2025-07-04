@@ -36,11 +36,26 @@ const generateImageFlow = ai.defineFlow(
     outputSchema: GenerateImageOutputSchema,
   },
   async input => {
-    const response = await ai.generate({
-      model: input.model || 'gemini-1.5-flash-preview-0514',
-      prompt: input.prompt,
-      output: {format: 'media'},
-    });
+    const model =
+      input.model || 'gemini-2.0-flash-preview-image-generation';
+    let response;
+
+    if (model === 'gemini-2.0-flash-preview-image-generation') {
+      response = await ai.generate({
+        model: `googleai/${model}`,
+        prompt: input.prompt,
+        config: {
+          responseModalities: ['TEXT', 'IMAGE'],
+        },
+      });
+    } else {
+      // For other models like Imagen
+      response = await ai.generate({
+        model,
+        prompt: input.prompt,
+        output: {format: 'media'},
+      });
+    }
 
     const media = response.media;
 

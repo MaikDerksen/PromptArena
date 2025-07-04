@@ -11,12 +11,12 @@ import { useAuth } from '@/contexts/auth-context'; // Import useAuth
 const GAME_ID = "default-game"; 
 
 export const IMAGE_MODELS = {
-  'gemini-1.5-flash-preview-0514': {
-    name: 'Gemini 1.5 Flash (Fast)',
+  'gemini-2.0-flash-preview-image-generation': {
+    name: 'Gemini 2.0 Flash (Fast)',
     cost: 1,
   },
-  'imagen-2': {
-    name: 'Imagen 2 (High Quality)',
+  'imagen-3.0-generate-002': {
+    name: 'Imagen 3 (High Quality)',
     cost: 3,
   },
 };
@@ -36,7 +36,7 @@ const defaultGameData: Game = {
   playerOneLastSeen: null,
   playerTwoLastSeen: null,
   imagesRevealed: false,
-  imageModel: 'gemini-1.5-flash-preview-0514',
+  imageModel: 'gemini-2.0-flash-preview-image-generation',
   roundDuration: 60,
   roundEndsAt: null,
 };
@@ -138,7 +138,7 @@ export function useGame() {
       throw new Error("User not authenticated");
     }
     
-    const gameModel = game?.imageModel || 'gemini-1.5-flash-preview-0514';
+    const gameModel = game?.imageModel || 'gemini-2.0-flash-preview-image-generation';
     const cost = IMAGE_MODELS[gameModel as keyof typeof IMAGE_MODELS]?.cost || 1;
 
     if (userProfile.credits < cost) {

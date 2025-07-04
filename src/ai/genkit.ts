@@ -1,8 +1,8 @@
 
 import {genkit} from 'genkit';
-import {googleAI} from '@genkit-ai/googleai';
+import {vertexAI} from '@genkit-ai/vertexai';
 
 export const ai = genkit({
-  plugins: [googleAI()],
-  model: 'googleai/imagen-4.0-generate-preview-06-06', //gemini-2.0-flash
+  plugins: [vertexAI({location: 'us-central1', apiVersion: 'v1'})],
+  model: 'vertexai/imagen-3.0-generate-002',
 });

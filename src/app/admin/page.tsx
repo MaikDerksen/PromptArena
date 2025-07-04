@@ -198,7 +198,7 @@ function AdminPageContent() {
             <div>
               <Label htmlFor="image-model-select">Image Generation Model</Label>
               <Select
-                value={game.imageModel || 'googleai/gemini-2.0-flash-preview-image-generation'}
+                value={game.imageModel || 'vertexai/gemini-1.5-flash-preview-0514'}
                 onValueChange={(value) => setImageModel(value)}
               >
                 <SelectTrigger id="image-model-select" className="w-full">

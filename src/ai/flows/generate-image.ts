@@ -36,13 +36,13 @@ const generateImageFlow = ai.defineFlow(
     outputSchema: GenerateImageOutputSchema,
   },
   async input => {
-    const {media} = await ai.generate({
-      model: input.model || 'googleai/imagen-4.0-generate-preview-06-06', //gemini-2.0-flash-preview-image-generation
+    const response = await ai.generate({
+      model: input.model || 'vertexai/imagen-3.0-generate-002',
       prompt: input.prompt,
-      config: {
-        responseModalities: ['TEXT', 'IMAGE'],
-      },
+      output: {format: 'media'},
     });
+
+    const media = response.media;
 
     if (!media || !media.url) {
       throw new Error('Image generation failed or no image URL was returned.');

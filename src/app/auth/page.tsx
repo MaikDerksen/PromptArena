@@ -1,17 +1,13 @@
 
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
-  RecaptchaVerifier,
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
-  linkWithPhoneNumber,
-  type ConfirmationResult,
 } from 'firebase/auth';
-import { db } from '@/lib/firebase';
-import { useAuth } from '@/contexts/auth-context';
+import { auth, db } from '@/lib/firebase';
 import { doc, setDoc, serverTimestamp, Timestamp } from 'firebase/firestore';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -20,32 +16,23 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
 import type { UserProfile } from '@/lib/types';
-import { INITIAL_CREDITS } from '@/contexts/auth-context';
-import PhoneInput from 'react-phone-number-input';
-import 'react-phone-number-input/style.css';
-import { useForm, Controller, type SubmitHandler } from 'react-hook-form';
+import { INITIAL_CREDITS, useAuth } from '@/contexts/auth-context';
+import { useForm, type SubmitHandler } from 'react-hook-form';
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
 import LoadingSpinner from '@/components/loading-spinner';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { AlertCircle } from 'lucide-react';
 
-declare global {
-  interface Window {
-    recaptchaVerifier?: RecaptchaVerifier;
-    confirmationResult?: ConfirmationResult;
-  }
-}
-
 const loginSchema = z.object({
   email: z.string().email({ message: 'Invalid email address.' }),
   password: z.string().min(1, { message: 'Password is required.' }),
 });
 
+// Simplified sign-up schema without phone number
 const signUpSchema = z.object({
   email: z.string().email({ message: 'Invalid email address.' }),
   password: z.string().min(6, { message: 'Password must be at least 6 characters.' }),
-  phone: z.string().min(10, { message: 'A valid phone number is required.' }),
 });
 
 type LoginSchema = z.infer<typeof loginSchema>;
@@ -54,15 +41,13 @@ type SignUpSchema = z.infer<typeof signUpSchema>;
 
 export default function AuthPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [showOtpInput, setShowOtpInput] = useState(false);
-  const [otp, setOtp] = useState('');
   const [formError, setFormError] = useState<string | null>(null);
   const router = useRouter();
   const { toast } = useToast();
-  const { auth, loading: authLoading } = useAuth();
+  const { authLoading } = useAuth();
 
   const {
-    control: signUpControl,
+    register: signUpRegister,
     handleSubmit: handleSignUpSubmit,
     formState: { errors: signUpErrors },
   } = useForm<SignUpSchema>({ resolver: zodResolver(signUpSchema), mode: 'onBlur' });
@@ -73,59 +58,34 @@ export default function AuthPage() {
     formState: { errors: loginErrors },
   } = useForm<LoginSchema>({ resolver: zodResolver(loginSchema) });
 
-  useEffect(() => {
-    if (authLoading || !auth) {
-      return;
-    }
-
-    if (window.recaptchaVerifier) {
-      window.recaptchaVerifier.clear();
-    }
-    
-    const verifier = new RecaptchaVerifier(
-      auth,
-      'recaptcha-container',
-      {
-        size: 'invisible',
-      }
-    );
-    window.recaptchaVerifier = verifier;
-
-    return () => {
-      verifier.clear();
-    };
-  }, [auth, authLoading]);
 
   const onSignUp: SubmitHandler<SignUpSchema> = async (data) => {
     setIsSubmitting(true);
     setFormError(null);
-
-    const verifier = window.recaptchaVerifier;
-    if (!verifier) {
-      setFormError("reCAPTCHA verifier not initialized. Please refresh and try again.");
-      setIsSubmitting(false);
-      return;
-    }
 
     try {
       const userCredential = await createUserWithEmailAndPassword(auth, data.email, data.password);
       const user = userCredential.user;
 
       if (user) {
-        toast({ title: 'Account Created', description: 'Now verifying your phone number...' });
-        
-        const confirmationResult = await linkWithPhoneNumber(user, data.phone, verifier);
-        window.confirmationResult = confirmationResult;
-        
-        setShowOtpInput(true);
+        // Create user profile directly without phone verification
+        const userProfile: UserProfile = {
+          uid: user.uid,
+          email: user.email!,
+          phoneNumber: null, // Phone number is not collected for now
+          credits: INITIAL_CREDITS,
+          createdAt: serverTimestamp() as Timestamp,
+        };
+        await setDoc(doc(db, 'users', user.uid), userProfile);
+
+        toast({ title: 'Sign Up Successful!', description: 'Your account is ready.' });
+        router.push('/');
       }
     } catch (error: any) {
-      console.error("Error during sign-up or phone linking:", error);
+      console.error("Error during sign-up:", error);
       let errorMessage = "An unknown error occurred. Please try again.";
-      if (error.code === 'auth/invalid-phone-number') {
-        errorMessage = 'The phone number you entered is not valid. Please check and try again.';
-      } else if (error.code === 'auth/too-many-requests') {
-        errorMessage = 'We have blocked all requests from this device due to unusual activity. Try again later.';
+       if (error.code === 'auth/email-already-in-use') {
+        errorMessage = 'This email address is already in use.';
       } else if (error.message) {
         errorMessage = error.message;
       }
@@ -149,33 +109,6 @@ export default function AuthPage() {
     }
   };
 
-  const onVerifyOtp = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!otp.trim() || !window.confirmationResult) return;
-    setIsSubmitting(true);
-    setFormError(null);
-    try {
-      await window.confirmationResult.confirm(otp);
-      const user = auth.currentUser;
-      if (!user) throw new Error("User not found after verification.");
-      
-      const userProfile: UserProfile = {
-        uid: user.uid,
-        email: user.email!,
-        phoneNumber: user.phoneNumber,
-        credits: INITIAL_CREDITS,
-        createdAt: serverTimestamp() as Timestamp,
-      };
-      await setDoc(doc(db, 'users', user.uid), userProfile);
-
-      toast({ title: 'Sign Up Successful!', description: 'Your account is ready.' });
-      router.push('/');
-    } catch (error: any) {
-      setFormError(error.message);
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
 
   return (
     <div className="flex justify-center items-center py-12">
@@ -183,30 +116,10 @@ export default function AuthPage() {
         <CardHeader>
           <CardTitle>Welcome to PromptArena</CardTitle>
           <CardDescription>
-            {showOtpInput ? 'Enter the code sent to your phone.' : 'Log in or create an account.'}
+            Log in or create an account to get started.
           </CardDescription>
         </CardHeader>
         <CardContent>
-          {showOtpInput ? (
-            <form onSubmit={onVerifyOtp} className="space-y-4">
-              {formError && <Alert variant="destructive"><AlertCircle className="h-4 w-4" /><AlertTitle>Error</AlertTitle><AlertDescription>{formError}</AlertDescription></Alert>}
-              <div>
-                <Label htmlFor="otp-input">Verification Code</Label>
-                <Input
-                  id="otp-input"
-                  type="text"
-                  value={otp}
-                  onChange={(e) => setOtp(e.target.value)}
-                  required
-                  disabled={isSubmitting}
-                  placeholder="Enter 6-digit code"
-                />
-              </div>
-              <Button type="submit" className="w-full" disabled={isSubmitting}>
-                {isSubmitting ? <><LoadingSpinner className="mr-2"/>Verifying...</> : 'Verify & Complete Sign Up'}
-              </Button>
-            </form>
-          ) : (
             <Tabs defaultValue="login" className="w-full">
               <TabsList className="grid w-full grid-cols-2">
                 <TabsTrigger value="login">Login</TabsTrigger>
@@ -235,34 +148,15 @@ export default function AuthPage() {
                   {formError && <Alert variant="destructive"><AlertCircle className="h-4 w-4" /><AlertTitle>Sign Up Failed</AlertTitle><AlertDescription>{formError}</AlertDescription></Alert>}
                   <div>
                     <Label htmlFor="signup-email">Email</Label>
-                    <Input id="signup-email" type="email" {...signUpControl.register('email')} placeholder="you@example.com"/>
+                    <Input id="signup-email" type="email" {...signUpRegister('email')} placeholder="you@example.com"/>
                     {signUpErrors.email && <p className="text-red-500 text-xs mt-1">{signUpErrors.email.message}</p>}
                   </div>
                   <div>
                     <Label htmlFor="signup-password">Password</Label>
-                    <Input id="signup-password" type="password" {...signUpControl.register('password')} placeholder="At least 6 characters" />
+                    <Input id="signup-password" type="password" {...signUpRegister('password')} placeholder="At least 6 characters" />
                     {signUpErrors.password && <p className="text-red-500 text-xs mt-1">{signUpErrors.password.message}</p>}
                   </div>
-                  <div>
-                    <Label htmlFor="phone-input">Phone Number for Verification</Label>
-                     <Controller
-                        name="phone"
-                        control={signUpControl}
-                        rules={{ required: true }}
-                        render={({ field }) => (
-                           <div className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-base ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium file:text-foreground placeholder:text-muted-foreground focus-within:outline-none focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 md:text-sm">
-                              <PhoneInput
-                                  {...field}
-                                  id="phone-input"
-                                  defaultCountry="US"
-                                  disabled={isSubmitting}
-                                  withCountryCallingCode
-                              />
-                           </div>
-                        )}
-                      />
-                     {signUpErrors.phone && <p className="text-red-500 text-xs mt-1">{signUpErrors.phone.message}</p>}
-                  </div>
+                  
                   <p className="text-xs text-muted-foreground">
                     First-time users will receive {INITIAL_CREDITS} free credits!
                   </p>
@@ -272,10 +166,8 @@ export default function AuthPage() {
                 </form>
               </TabsContent>
             </Tabs>
-          )}
         </CardContent>
       </Card>
-      <div id="recaptcha-container"></div>
     </div>
   );
 }

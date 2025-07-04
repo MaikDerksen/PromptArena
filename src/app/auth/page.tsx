@@ -73,6 +73,7 @@ export default function AuthPage() {
 
   const {
     control: signUpControl,
+    register: signUpRegister,
     handleSubmit: handleSignUpSubmit,
     formState: { errors: signUpErrors },
   } = useForm<SignUpSchema>({ resolver: zodResolver(signUpSchema), mode: 'onBlur' });
@@ -295,6 +296,3 @@ export default function AuthPage() {
     </div>
   );
 }
-
-
-    

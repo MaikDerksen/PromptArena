@@ -75,7 +75,7 @@ export default function AuthPage() {
 
   const router = useRouter();
   const { toast } = useToast();
-  const { auth, authLoading } = useAuth();
+  const { auth, loading } = useAuth();
 
   const {
     register: loginRegister,
@@ -251,7 +251,7 @@ export default function AuthPage() {
                         Forgot Password?
                     </Button>
                 </div>
-                <Button type="submit" className="w-full" disabled={isSubmitting || authLoading}>
+                <Button type="submit" className="w-full" disabled={isSubmitting || loading}>
                   {isSubmitting ? <><LoadingSpinner className="mr-2" />Logging In...</> : 'Login'}
                 </Button>
               </form>
@@ -290,7 +290,7 @@ export default function AuthPage() {
                   <p className="text-xs text-muted-foreground">
                     First-time users will receive {INITIAL_CREDITS} free credits!
                   </p>
-                  <Button type="submit" className="w-full" disabled={isSubmitting || authLoading}>
+                  <Button type="submit" className="w-full" disabled={isSubmitting || loading}>
                     {isSubmitting ? <><LoadingSpinner className="mr-2" />Sending Code...</> : 'Sign Up & Verify Phone'}
                   </Button>
                 </form>
@@ -306,7 +306,7 @@ export default function AuthPage() {
                    <Button type="button" variant="link" size="sm" onClick={() => { setIsOtpSent(false); setFormError(null); if (window.recaptchaVerifier) { window.recaptchaVerifier.clear(); } }} className="text-primary">
                     Use a different phone number?
                   </Button>
-                  <Button type="submit" className="w-full" disabled={isSubmitting || authLoading}>
+                  <Button type="submit" className="w-full" disabled={isSubmitting || loading}>
                     {isSubmitting ? <><LoadingSpinner className="mr-2" />Verifying...</> : 'Verify & Complete Sign Up'}
                   </Button>
                 </form>

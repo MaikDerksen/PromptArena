@@ -196,7 +196,7 @@ function AdminPageContent() {
                 <CardDescription>Status:</CardDescription>
                 <GameStatusBadge status={game.status} />
               </div>
-              {game.status === 'active' && <RoundTimer endTime={game.roundEndsAt} status={game.status} className="text-primary" />}
+              {game.status === 'active' && <RoundTimer endTime={game.roundEndsAt ?? null} status={game.status} className="text-primary" />}
             </div>
             <div className="flex items-center gap-2 text-sm">
                 <CreditCard className="h-5 w-5 text-primary"/>

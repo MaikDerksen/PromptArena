@@ -54,27 +54,29 @@ function GalleryPageContent() {
     fetchImages();
   }, [currentUser]);
 
-  const handleDownload = async (imageUrl: string, prompt: string) => {
+  const handleDownload = (imageUrl: string, prompt: string) => {
     try {
-      const response = await fetch(imageUrl);
-      if (!response.ok) throw new Error('Network response was not ok.');
-      const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
       const sanitizedPrompt = prompt.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '').slice(0, 50);
-      link.download = `promptarena-${sanitizedPrompt || 'image'}.png`;
+      const filename = `promptarena-${sanitizedPrompt || 'image'}.png`;
+      
+      // Use our server-side proxy to bypass CORS issues.
+      const downloadUrl = `/api/download-image?url=${encodeURIComponent(imageUrl)}&filename=${encodeURIComponent(filename)}`;
+
+      // Create a temporary link element and click it to trigger the download.
+      const link = document.createElement('a');
+      link.href = downloadUrl;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
-      window.URL.revokeObjectURL(url);
+
     } catch (err) {
-      console.error('Download error:', err);
+      console.error('Download initiation error:', err);
       toast({
         title: "Download Failed",
-        description: "Could not download the image directly. Opening in a new tab as a fallback.",
+        description: "Could not start the download process. As a fallback, you can open the image in a new tab and save it manually.",
         variant: "destructive",
       });
+      // Fallback for any unexpected errors with the proxy approach
       window.open(imageUrl, '_blank', 'noopener,noreferrer');
     }
   };

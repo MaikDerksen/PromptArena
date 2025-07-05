@@ -10,10 +10,11 @@ import {
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
   GoogleAuthProvider,
+  AppleAuthProvider,
   signInWithPopup,
 } from 'firebase/auth';
 import { db } from '@/lib/firebase';
-import { doc, setDoc, getDoc, serverTimestamp, Timestamp } from 'firebase/firestore';
+import { doc, setDoc, getDoc, serverTimestamp, Timestamp, collection, query, where, getDocs } from 'firebase/firestore';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -67,6 +68,13 @@ function GoogleIcon(props: React.SVGProps<SVGSVGElement>) {
   );
 }
 
+function AppleIcon(props: React.SVGProps<SVGSVGElement>) {
+  return (
+    <svg viewBox="0 0 24 24" fill="currentColor" height="24px" width="24px" {...props}>
+      <path d="M19.64 15.36c-.03 2.31-1.29 4.38-3.08 5.64-1.12.78-2.39 1.15-3.53.99-1.39-.2-2.8-1.04-3.88-1.04-1.09 0-2.25.78-3.46.99-.93.18-1.88.02-2.73-.51-1.89-1.14-3-3.13-3.03-5.46.02-2.1 1.25-4.07 2.93-5.22 1.1-.75 2.37-1.15 3.52-.99 1.25.18 2.45.91 3.28.91.81 0 2.22-.99 3.66-.91 1.12.06 2.43.43 3.52 1.22s1.86 3.19 1.8 5.02zM15.75 4.71c.98-.99 1.62-2.2 1.52-3.41-.09-1.21-1.25-2.2-2.48-2.22-1.3-.02-2.61.83-3.59 1.82-.9.89-1.74 2.18-1.59 3.39.14 1.14 1.33 2.11 2.53 2.11 1.36 0 2.59-.89 3.61-1.69z" />
+    </svg>
+  );
+}
 
 export default function AuthPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -110,6 +118,23 @@ export default function AuthPage() {
   const onSignUp: SubmitHandler<SignUpSchema> = async (data) => {
     setIsSubmitting(true);
     setFormError(null);
+
+    // Check for unique phone number
+    try {
+        const usersRef = collection(db, 'users');
+        const q = query(usersRef, where("phoneNumber", "==", data.phoneNumber));
+        const querySnapshot = await getDocs(q);
+        if (!querySnapshot.empty) {
+            setFormError("This phone number is already registered. Please use a different one or log in.");
+            setIsSubmitting(false);
+            return;
+        }
+    } catch(e) {
+        console.error("Error checking phone number uniqueness:", e);
+        setFormError("Could not verify phone number. Please try again later.");
+        setIsSubmitting(false);
+        return;
+    }
 
     // Clean up any dangling verifiers from previous attempts
     if (window.recaptchaVerifier) {
@@ -200,14 +225,19 @@ export default function AuthPage() {
     }
   };
   
-  const handleSocialSignIn = async (providerName: 'google') => {
+  const handleSocialSignIn = async (providerName: 'google' | 'apple') => {
     setIsSubmitting(true);
     setFormError(null);
-    const provider = providerName === 'google' ? new GoogleAuthProvider() : undefined;
-    if (!provider) {
-      setFormError('Invalid social login provider.');
-      setIsSubmitting(false);
-      return;
+    
+    let provider;
+    if (providerName === 'google') {
+      provider = new GoogleAuthProvider();
+    } else if (providerName === 'apple') {
+      provider = new AppleAuthProvider();
+    } else {
+       setFormError('Invalid social login provider.');
+       setIsSubmitting(false);
+       return;
     }
     
     try {
@@ -232,6 +262,8 @@ export default function AuthPage() {
       }
       router.push('/');
     } catch (error: any) {
+      // The 'auth/popup-closed-by-user' error often occurs in development if the
+      // dev URL is not in the Firebase Console's list of "Authorized Domains".
       setFormError(error.message);
     } finally {
       setIsSubmitting(false);
@@ -278,9 +310,14 @@ export default function AuthPage() {
                         <span className="bg-card px-2 text-muted-foreground">Or continue with</span>
                     </div>
                 </div>
-                <Button variant="outline" className="w-full gap-2" onClick={() => handleSocialSignIn('google')} disabled={isSubmitting}>
-                    <GoogleIcon /> Sign in with Google
-                </Button>
+                <div className="space-y-2">
+                  <Button variant="outline" className="w-full gap-2" onClick={() => handleSocialSignIn('google')} disabled={isSubmitting}>
+                      <GoogleIcon /> Sign in with Google
+                  </Button>
+                  <Button variant="outline" className="w-full gap-2" onClick={() => handleSocialSignIn('apple')} disabled={isSubmitting}>
+                      <AppleIcon className="text-foreground" /> Sign in with Apple
+                  </Button>
+                </div>
               </form>
             </TabsContent>
             <TabsContent value="signup">
@@ -328,9 +365,14 @@ export default function AuthPage() {
                         <span className="bg-card px-2 text-muted-foreground">Or continue with</span>
                     </div>
                   </div>
-                  <Button variant="outline" className="w-full gap-2" onClick={() => handleSocialSignIn('google')} disabled={isSubmitting}>
-                      <GoogleIcon /> Sign up with Google
-                  </Button>
+                  <div className="space-y-2">
+                    <Button variant="outline" className="w-full gap-2" onClick={() => handleSocialSignIn('google')} disabled={isSubmitting}>
+                        <GoogleIcon /> Sign up with Google
+                    </Button>
+                    <Button variant="outline" className="w-full gap-2" onClick={() => handleSocialSignIn('apple')} disabled={isSubmitting}>
+                        <AppleIcon className="text-foreground" /> Sign up with Apple
+                    </Button>
+                  </div>
                 </form>
               ) : (
                 <form onSubmit={handleOtpSubmit(onVerifyOtp)} className="space-y-4 pt-4">
@@ -362,4 +404,3 @@ export default function AuthPage() {
     </div>
   );
 }
-

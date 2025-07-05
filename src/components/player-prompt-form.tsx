@@ -117,7 +117,7 @@ export default function PlayerPromptForm({ playerKey, playerName }: PlayerPrompt
               <CardTitle className="font-headline text-3xl">{playerName}'s Turn</CardTitle>
               <CardDescription>The current central prompt is: <strong className="text-primary">{game.prompt || "Waiting for admin..."}</strong></CardDescription>
             </div>
-            {isRoundActive && <RoundTimer endTime={game.roundEndsAt} status={game.status} className="text-lg text-primary" />}
+            {isRoundActive && <RoundTimer endTime={game.roundEndsAt ?? null} status={game.status} className="text-lg text-primary" />}
           </div>
 
           {!isRoundActive && game.status === 'waiting' && (

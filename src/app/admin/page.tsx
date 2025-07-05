@@ -136,6 +136,18 @@ function AdminPageContent() {
   const handleTestApi = async () => {
     setIsTestingApi(true);
     setApiTestResult(null);
+
+    if (!game || !game.imageModel) {
+        toast({
+            title: "Test Error",
+            description: "Game data or image model is not available.",
+            variant: "destructive",
+        });
+        setApiTestResult({ success: false, message: "Cannot run test: Game data or image model not selected.", statusCode: 400 });
+        setIsTestingApi(false);
+        return;
+    }
+
     try {
       const testPrompt = "Test image: a friendly robot waving";
       const result = await generateImage({ prompt: testPrompt, model: game.imageModel });

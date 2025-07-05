@@ -1,9 +1,9 @@
 
 import { useState, useEffect, useCallback } from 'react';
-import { doc, setDoc, onSnapshot, serverTimestamp, updateDoc, Timestamp, runTransaction } from 'firebase/firestore';
+import { doc, setDoc, onSnapshot, serverTimestamp, updateDoc, Timestamp, runTransaction, collection, addDoc } from 'firebase/firestore';
 import { ref as storageRef, uploadString, getDownloadURL, deleteObject } from 'firebase/storage';
 import { db, storage } from '@/lib/firebase';
-import type { Game, GameStatus, PlayerKey, UserProfile } from '@/lib/types';
+import type { Game, GameStatus, PlayerKey, UserProfile, GeneratedImage } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
 import { generateImage as genImageFlow } from '@/ai/flows/generate-image';
 import { useAuth } from '@/contexts/auth-context'; // Import useAuth
@@ -195,6 +195,16 @@ export function useGame() {
         transaction.update(userDocRef, { credits: currentCredits - cost });
         transaction.update(gameDocRef, { [imageField]: downloadURL, [lastSeenField]: serverTimestamp(), updatedAt: serverTimestamp() });
       });
+
+      // Save image details to the new collection for the gallery
+      const generatedImageData: GeneratedImage = {
+          userId: currentUser.uid,
+          imageUrl: downloadURL,
+          prompt: playerPrompt,
+          playerKey: player,
+          createdAt: Timestamp.now(),
+      };
+      await addDoc(collection(db, 'generated_images'), generatedImageData);
       
       await refreshUserProfile();
       toast({ title: "Submission Successful", description: "Image generated!" });

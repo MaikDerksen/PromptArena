@@ -11,6 +11,7 @@ import {
   signInWithEmailAndPassword,
   GoogleAuthProvider,
   signInWithPopup,
+  sendPasswordResetEmail,
 } from 'firebase/auth';
 import { db } from '@/lib/firebase';
 import { doc, setDoc, getDoc, serverTimestamp, Timestamp, collection, query, where, getDocs } from 'firebase/firestore';
@@ -19,6 +20,15 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+  DialogClose,
+} from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
 import type { UserProfile } from '@/lib/types';
 import { INITIAL_CREDITS, useAuth } from '@/contexts/auth-context';
@@ -30,7 +40,6 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { AlertCircle } from 'lucide-react';
 import PhoneInput, { isPossiblePhoneNumber } from 'react-phone-number-input/input';
 
-// Extend Window interface for reCAPTCHA verifier
 declare global {
   interface Window {
     recaptchaVerifier?: RecaptchaVerifier;
@@ -73,6 +82,9 @@ export default function AuthPage() {
   const [isOtpSent, setIsOtpSent] = useState(false);
   const [confirmationResult, setConfirmationResult] = useState<ConfirmationResult | null>(null);
   const [signUpData, setSignUpData] = useState<SignUpSchema | null>(null);
+  const [isResetPasswordDialogOpen, setIsResetPasswordDialogOpen] = useState(false);
+  const [resetEmail, setResetEmail] = useState('');
+
 
   const router = useRouter();
   const { toast } = useToast();
@@ -99,18 +111,15 @@ export default function AuthPage() {
   } = useForm<OtpSchema>({ resolver: zodResolver(otpSchema) });
 
   useEffect(() => {
-    // This effect ensures the OTP form is cleared whenever it is displayed.
     if (isOtpSent) {
       resetOtpForm();
     }
   }, [isOtpSent, resetOtpForm]);
 
-
   const onSignUp: SubmitHandler<SignUpSchema> = async (data) => {
     setIsSubmitting(true);
     setFormError(null);
 
-    // Check for unique phone number
     try {
         const usersRef = collection(db, 'users');
         const q = query(usersRef, where("phoneNumber", "==", data.phoneNumber));
@@ -127,32 +136,24 @@ export default function AuthPage() {
         return;
     }
 
-    // Clean up any dangling verifiers from previous attempts
     if (window.recaptchaVerifier) {
       window.recaptchaVerifier.clear();
     }
 
     try {
-      // Create a new verifier for each sign-up attempt to avoid state issues
       const verifier = new RecaptchaVerifier(auth!, 'recaptcha-container', {
-        'size': 'invisible',
-        'callback': () => {},
-        'expired-callback': () => {}
+        'size': 'invisible', 'callback': () => {}, 'expired-callback': () => {}
       });
       window.recaptchaVerifier = verifier;
       
       const result = await signInWithPhoneNumber(auth!, data.phoneNumber, verifier);
       setConfirmationResult(result);
-      setSignUpData(data); // Store form data to use after OTP verification
+      setSignUpData(data);
       setIsOtpSent(true);
       toast({ title: 'Verification Code Sent', description: 'Please enter the code sent to your phone.' });
     } catch (error: any) {
       console.error("Error during phone number sign-in:", error);
-      let errorMessage = error.message || 'Failed to send verification code. Please make sure the phone number is correct.';
-      if (error.code === 'auth/invalid-phone-number') {
-        errorMessage = 'The phone number provided is not valid. Please check and try again.';
-      }
-      setFormError(errorMessage);
+      setFormError(error.message || 'Failed to send verification code.');
     } finally {
       setIsSubmitting(false);
     }
@@ -182,7 +183,6 @@ export default function AuthPage() {
           createdAt: serverTimestamp() as Timestamp,
         };
         await setDoc(doc(db, 'users', user.uid), userProfile);
-
         toast({ title: 'Sign Up Successful!', description: 'Your account is ready.' });
         router.push('/');
       }
@@ -220,10 +220,8 @@ export default function AuthPage() {
     setIsSubmitting(true);
     setFormError(null);
     
-    let provider;
-    if (providerName === 'google') {
-      provider = new GoogleAuthProvider();
-    } else {
+    let provider = providerName === 'google' ? new GoogleAuthProvider() : null;
+    if (!provider) {
        setFormError('Invalid social login provider.');
        setIsSubmitting(false);
        return;
@@ -251,9 +249,24 @@ export default function AuthPage() {
       }
       router.push('/');
     } catch (error: any) {
-      // The 'auth/popup-closed-by-user' error often occurs in development if the
-      // dev URL is not in the Firebase Console's list of "Authorized Domains".
       setFormError(error.message);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handlePasswordReset = async () => {
+    if (!resetEmail) {
+      toast({ title: 'Error', description: 'Please enter your email address.', variant: 'destructive' });
+      return;
+    }
+    setIsSubmitting(true);
+    try {
+      await sendPasswordResetEmail(auth, resetEmail);
+      toast({ title: 'Password Reset Email Sent', description: 'Please check your inbox to reset your password.' });
+      setIsResetPasswordDialogOpen(false);
+    } catch (error: any) {
+      toast({ title: 'Error', description: error.message, variant: 'destructive' });
     } finally {
       setIsSubmitting(false);
     }
@@ -288,22 +301,21 @@ export default function AuthPage() {
                   <Input id="login-password" type="password" {...loginRegister('password')} placeholder="••••••••" autoComplete="current-password" />
                   {loginErrors.password && <p className="text-red-500 text-xs mt-1">{loginErrors.password.message}</p>}
                 </div>
+                <div className="flex justify-end">
+                    <Button type="button" variant="link" size="sm" onClick={() => setIsResetPasswordDialogOpen(true)} className="p-0 h-auto">
+                        Forgot Password?
+                    </Button>
+                </div>
                 <Button type="submit" className="w-full" disabled={isSubmitting || authLoading}>
                   {isSubmitting ? <><LoadingSpinner className="mr-2" />Logging In...</> : 'Login'}
                 </Button>
                  <div className="relative my-4">
-                    <div className="absolute inset-0 flex items-center">
-                        <span className="w-full border-t" />
-                    </div>
-                    <div className="relative flex justify-center text-xs uppercase">
-                        <span className="bg-card px-2 text-muted-foreground">Or continue with</span>
-                    </div>
+                    <div className="absolute inset-0 flex items-center"><span className="w-full border-t" /></div>
+                    <div className="relative flex justify-center text-xs uppercase"><span className="bg-card px-2 text-muted-foreground">Or continue with</span></div>
                 </div>
-                <div className="space-y-2">
-                  <Button variant="outline" className="w-full gap-2" onClick={() => handleSocialSignIn('google')} disabled={isSubmitting}>
-                      <GoogleIcon /> Sign in with Google
-                  </Button>
-                </div>
+                <Button variant="outline" className="w-full gap-2" onClick={() => handleSocialSignIn('google')} disabled={isSubmitting}>
+                    <GoogleIcon /> Sign in with Google
+                </Button>
               </form>
             </TabsContent>
             <TabsContent value="signup">
@@ -344,18 +356,12 @@ export default function AuthPage() {
                     {isSubmitting ? <><LoadingSpinner className="mr-2" />Sending Code...</> : 'Sign Up & Verify Phone'}
                   </Button>
                   <div className="relative my-4">
-                    <div className="absolute inset-0 flex items-center">
-                        <span className="w-full border-t" />
-                    </div>
-                    <div className="relative flex justify-center text-xs uppercase">
-                        <span className="bg-card px-2 text-muted-foreground">Or continue with</span>
-                    </div>
+                    <div className="absolute inset-0 flex items-center"><span className="w-full border-t" /></div>
+                    <div className="relative flex justify-center text-xs uppercase"><span className="bg-card px-2 text-muted-foreground">Or continue with</span></div>
                   </div>
-                  <div className="space-y-2">
-                    <Button variant="outline" className="w-full gap-2" onClick={() => handleSocialSignIn('google')} disabled={isSubmitting}>
-                        <GoogleIcon /> Sign up with Google
-                    </Button>
-                  </div>
+                  <Button variant="outline" className="w-full gap-2" onClick={() => handleSocialSignIn('google')} disabled={isSubmitting}>
+                      <GoogleIcon /> Sign up with Google
+                  </Button>
                 </form>
               ) : (
                 <form onSubmit={handleOtpSubmit(onVerifyOtp)} className="space-y-4 pt-4">
@@ -366,17 +372,11 @@ export default function AuthPage() {
                     <Input id="otp" type="text" {...otpRegister('otp')} placeholder="123456" maxLength={6} autoComplete="one-time-code" />
                     {otpErrors.otp && <p className="text-red-500 text-xs mt-1">{otpErrors.otp.message}</p>}
                   </div>
-                   <Button type="button" variant="link" size="sm" onClick={() => {
-                       setIsOtpSent(false); 
-                       setFormError(null);
-                       if (window.recaptchaVerifier) {
-                           window.recaptchaVerifier.clear();
-                       }
-                    }} className="text-primary">
+                   <Button type="button" variant="link" size="sm" onClick={() => { setIsOtpSent(false); setFormError(null); if (window.recaptchaVerifier) { window.recaptchaVerifier.clear(); } }} className="text-primary">
                     Use a different phone number?
                   </Button>
                   <Button type="submit" className="w-full" disabled={isSubmitting || authLoading}>
-                    {isSubmitting ? <><LoadingSpinner className="mr-2" />Verifying & Creating Account...</> : 'Verify & Complete Sign Up'}
+                    {isSubmitting ? <><LoadingSpinner className="mr-2" />Verifying...</> : 'Verify & Complete Sign Up'}
                   </Button>
                 </form>
               )}
@@ -384,6 +384,37 @@ export default function AuthPage() {
           </Tabs>
         </CardContent>
       </Card>
+
+      <Dialog open={isResetPasswordDialogOpen} onOpenChange={setIsResetPasswordDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Reset Password</DialogTitle>
+            <DialogDescription>
+              Enter your email address below. If an account exists, we will send you a link to reset your password.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div>
+              <Label htmlFor="reset-email">Email Address</Label>
+              <Input
+                id="reset-email"
+                type="email"
+                placeholder="you@example.com"
+                value={resetEmail}
+                onChange={(e) => setResetEmail(e.target.value)}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <DialogClose asChild>
+              <Button type="button" variant="secondary">Cancel</Button>
+            </DialogClose>
+            <Button onClick={handlePasswordReset} disabled={isSubmitting}>
+              {isSubmitting ? <><LoadingSpinner className="mr-2" /> Sending...</> : 'Send Reset Link'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

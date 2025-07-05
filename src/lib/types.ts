@@ -35,3 +35,12 @@ export interface UserProfile {
   credits: number;
   createdAt: Timestamp | Date | null;
 }
+
+export interface GeneratedImage {
+  id?: string;
+  userId: string;
+  imageUrl: string;
+  prompt: string;
+  playerKey: PlayerKey;
+  createdAt: Timestamp;
+}

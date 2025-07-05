@@ -2,21 +2,34 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import Link from 'next/link';
 import Image from 'next/image';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { useGame, IMAGE_MODELS } from '@/hooks/use-game';
 import LoadingSpinner from '@/components/loading-spinner';
 import ImageCard from '@/components/image-card';
 import GameStatusBadge from '@/components/game-status-badge';
-import { AlertCircle, Edit3, Play, RotateCcw, SkipForward, Eye, UserCheck, UserX, Image as ImageIcon, CheckCircle, Wifi, HelpCircle, CreditCard, Settings, Timer } from 'lucide-react';
+import { AlertCircle, Edit3, Play, RotateCcw, SkipForward, Eye, UserCheck, UserX, Image as ImageIcon, CheckCircle, Wifi, HelpCircle, CreditCard, Settings, Timer, Trash2, GalleryThumbnails } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Timestamp } from 'firebase/firestore';
 import { generateImage } from '@/ai/flows/generate-image'; 
 import AuthGuard from '@/components/auth-guard';
 import { useAuth } from '@/contexts/auth-context';
+import { useToast } from '@/hooks/use-toast';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import RoundTimer from '@/components/round-timer';
 
@@ -37,13 +50,15 @@ const formatLastSeen = (lastSeen: Timestamp | Date | null): {text: string, icon:
 
 function AdminPageContent() {
   const { game, loading: gameLoading, error: gameError, setCentralPrompt, startRound, updateGameStatus, revealImages, resetRound, resetGame, setImageModel } = useGame();
-  const { userProfile, loading: authLoading } = useAuth();
+  const { userProfile, loading: authLoading, deleteCurrentUserAccount } = useAuth();
+  const { toast } = useToast();
   
   const [newPrompt, setNewPrompt] = useState('');
   const [isSubmittingPrompt, setIsSubmittingPrompt] = useState(false);
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
   const [isRevealingImages, setIsRevealingImages] = useState(false);
   const [isStartingRound, setIsStartingRound] = useState(false);
+  const [isDeletingAccount, setIsDeletingAccount] = useState(false);
 
   const [roundDuration, setRoundDuration] = useState('60');
 
@@ -105,12 +120,24 @@ function AdminPageContent() {
     }
   };
 
+  const handleDeleteAccount = async () => {
+    setIsDeletingAccount(true);
+    try {
+      await deleteCurrentUserAccount();
+      toast({ title: "Account Deleted", description: "Your account and all associated data have been permanently removed."});
+      // The user will be logged out and unauthenticated, they will be redirected by AuthGuard or context.
+    } catch (error: any) {
+      toast({ title: "Deletion Failed", description: error.message, variant: "destructive" });
+    } finally {
+      setIsDeletingAccount(false);
+    }
+  };
+
   const handleTestApi = async () => {
     setIsTestingApi(true);
     setApiTestResult(null);
     try {
       const testPrompt = "Test image: a friendly robot waving";
-      // Use the currently selected model for the test
       const result = await generateImage({ prompt: testPrompt, model: game.imageModel });
       if (result.imageUrl) {
         setApiTestResult({ success: true, message: "API connection successful! Image generated.", imageUrl: result.imageUrl, statusCode: 200 });
@@ -122,7 +149,7 @@ function AdminPageContent() {
       setApiTestResult({ 
         success: false, 
         message: `API Test Failed: ${err.message || 'Unknown error'}`,
-        statusCode: 500 // Generic server error, as we can't be sure of the exact code from the flow.
+        statusCode: 500
       });
     } finally {
       setIsTestingApi(false);
@@ -338,6 +365,46 @@ function AdminPageContent() {
           />
         </CardContent>
       </Card>
+
+      <Card>
+        <CardHeader>
+            <CardTitle>Account Management</CardTitle>
+            <CardDescription>View your generated images or permanently delete your account.</CardDescription>
+        </CardHeader>
+        <CardContent className="flex flex-col sm:flex-row gap-4">
+            <Button asChild>
+                <Link href="/gallery" className="flex items-center gap-2">
+                    <GalleryThumbnails className="h-4 w-4"/> Go to My Image Gallery
+                </Link>
+            </Button>
+            <AlertDialog>
+                <AlertDialogTrigger asChild>
+                    <Button variant="destructive" className="flex items-center gap-2">
+                        <Trash2 className="h-4 w-4"/> Delete My Account
+                    </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            This action is irreversible. It will permanently delete your account,
+                            your credits, and all of your generated images.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                        <AlertDialogAction onClick={handleDeleteAccount} disabled={isDeletingAccount} className="bg-destructive hover:bg-destructive/80">
+                            {isDeletingAccount ? <><LoadingSpinner className="mr-2"/> Deleting...</> : "Yes, Delete My Account"}
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
+        </CardContent>
+        <CardFooter>
+          <p className="text-xs text-muted-foreground">Note: Deleting your account may require you to log in again for security purposes.</p>
+        </CardFooter>
+      </Card>
+
     </div>
   );
 }

@@ -203,6 +203,7 @@ export function useGame() {
           prompt: playerPrompt,
           playerKey: player,
           createdAt: Timestamp.now(),
+          model: gameModel,
       };
       await addDoc(collection(db, 'generated_images'), generatedImageData);
       

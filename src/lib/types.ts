@@ -43,4 +43,5 @@ export interface GeneratedImage {
   prompt: string;
   playerKey: PlayerKey;
   createdAt: Timestamp;
+  model?: string;
 }

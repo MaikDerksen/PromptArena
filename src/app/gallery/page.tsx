@@ -10,16 +10,16 @@ import { collection, query, where, getDocs, orderBy } from 'firebase/firestore';
 import type { GeneratedImage } from '@/lib/types';
 import LoadingSpinner from '@/components/loading-spinner';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { AlertCircle, Download, Image as ImageIcon, User, Quote, Palette } from 'lucide-react';
+import { AlertCircle, Download, Image as ImageIcon, User, Quote, Palette, Cpu } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
-  DialogDescription,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
+import { useToast } from '@/hooks/use-toast';
 
 function GalleryPageContent() {
   const { currentUser } = useAuth();
@@ -27,6 +27,7 @@ function GalleryPageContent() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedImage, setSelectedImage] = useState<GeneratedImage | null>(null);
+  const { toast } = useToast();
 
   useEffect(() => {
     const fetchImages = async () => {
@@ -53,19 +54,31 @@ function GalleryPageContent() {
     fetchImages();
   }, [currentUser]);
 
-  const handleDownload = (imageUrl: string) => {
-    const link = document.createElement('a');
-    link.href = imageUrl;
-    // To bypass potential CORS issues for direct download, we can fetch as blob
-    // However, for Firebase Storage URLs, a simple download attribute often works if configured correctly.
-    // For wider compatibility, opening in a new tab is a reliable fallback.
-    link.target = '_blank';
-    link.rel = 'noopener noreferrer';
-    link.download = `promptarena-image-${Date.now()}.png`; // Suggested filename
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+  const handleDownload = async (imageUrl: string, prompt: string) => {
+    try {
+      const response = await fetch(imageUrl);
+      if (!response.ok) throw new Error('Network response was not ok.');
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      const sanitizedPrompt = prompt.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '').slice(0, 50);
+      link.download = `promptarena-${sanitizedPrompt || 'image'}.png`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error('Download error:', err);
+      toast({
+        title: "Download Failed",
+        description: "Could not download the image directly. Opening in a new tab as a fallback.",
+        variant: "destructive",
+      });
+      window.open(imageUrl, '_blank', 'noopener,noreferrer');
+    }
   };
+
 
   if (loading) {
     return (
@@ -157,7 +170,13 @@ function GalleryPageContent() {
                         <h3 className="font-semibold flex items-center gap-2"><Quote className="h-4 w-4 text-primary"/>Prompt</h3>
                         <p className="p-3 bg-muted rounded-md text-muted-foreground break-words">{selectedImage.prompt}</p>
                     </div>
-                    <Button onClick={() => handleDownload(selectedImage.imageUrl)} className="w-full">
+                    {selectedImage.model && (
+                      <div className="space-y-1">
+                          <h3 className="font-semibold flex items-center gap-2"><Cpu className="h-4 w-4 text-primary"/>Model Used</h3>
+                          <p className="p-3 bg-muted rounded-md text-muted-foreground break-words font-mono text-xs">{selectedImage.model}</p>
+                      </div>
+                    )}
+                    <Button onClick={() => handleDownload(selectedImage.imageUrl, selectedImage.prompt)} className="w-full">
                         <Download className="mr-2 h-4 w-4"/> Download Image
                     </Button>
                 </div>

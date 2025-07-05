@@ -10,7 +10,6 @@ import {
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
   GoogleAuthProvider,
-  AppleAuthProvider,
   signInWithPopup,
 } from 'firebase/auth';
 import { db } from '@/lib/firebase';
@@ -64,14 +63,6 @@ function GoogleIcon(props: React.SVGProps<SVGSVGElement>) {
       <path fill="#FF3D00" d="M6.306,14.691l6.571,4.819C14.655,15.108,18.961,12,24,12c3.059,0,5.842,1.154,7.961,3.039l5.657-5.657C34.046,6.053,29.268,4,24,4C16.318,4,9.656,8.337,6.306,14.691z" />
       <path fill="#4CAF50" d="M24,44c5.166,0,9.86-1.977,13.409-5.192l-6.19-5.238C29.211,35.091,26.715,36,24,36c-5.202,0-9.619-3.317-11.283-7.946l-6.522,5.025C9.505,39.556,16.227,44,24,44z" />
       <path fill="#1976D2" d="M43.611,20.083H42V20H24v8h11.303c-0.792,2.237-2.231,4.166-4.089,5.571l6.19,5.238C42.022,35.788,44,30.244,44,24C44,22.659,43.862,21.35,43.611,20.083z" />
-    </svg>
-  );
-}
-
-function AppleIcon(props: React.SVGProps<SVGSVGElement>) {
-  return (
-    <svg viewBox="0 0 24 24" fill="currentColor" height="24px" width="24px" {...props}>
-      <path d="M19.64 15.36c-.03 2.31-1.29 4.38-3.08 5.64-1.12.78-2.39 1.15-3.53.99-1.39-.2-2.8-1.04-3.88-1.04-1.09 0-2.25.78-3.46.99-.93.18-1.88.02-2.73-.51-1.89-1.14-3-3.13-3.03-5.46.02-2.1 1.25-4.07 2.93-5.22 1.1-.75 2.37-1.15 3.52-.99 1.25.18 2.45.91 3.28.91.81 0 2.22-.99 3.66-.91 1.12.06 2.43.43 3.52 1.22s1.86 3.19 1.8 5.02zM15.75 4.71c.98-.99 1.62-2.2 1.52-3.41-.09-1.21-1.25-2.2-2.48-2.22-1.3-.02-2.61.83-3.59 1.82-.9.89-1.74 2.18-1.59 3.39.14 1.14 1.33 2.11 2.53 2.11 1.36 0 2.59-.89 3.61-1.69z" />
     </svg>
   );
 }
@@ -225,15 +216,13 @@ export default function AuthPage() {
     }
   };
   
-  const handleSocialSignIn = async (providerName: 'google' | 'apple') => {
+  const handleSocialSignIn = async (providerName: 'google') => {
     setIsSubmitting(true);
     setFormError(null);
     
     let provider;
     if (providerName === 'google') {
       provider = new GoogleAuthProvider();
-    } else if (providerName === 'apple') {
-      provider = new AppleAuthProvider();
     } else {
        setFormError('Invalid social login provider.');
        setIsSubmitting(false);
@@ -314,9 +303,6 @@ export default function AuthPage() {
                   <Button variant="outline" className="w-full gap-2" onClick={() => handleSocialSignIn('google')} disabled={isSubmitting}>
                       <GoogleIcon /> Sign in with Google
                   </Button>
-                  <Button variant="outline" className="w-full gap-2" onClick={() => handleSocialSignIn('apple')} disabled={isSubmitting}>
-                      <AppleIcon className="text-foreground" /> Sign in with Apple
-                  </Button>
                 </div>
               </form>
             </TabsContent>
@@ -368,9 +354,6 @@ export default function AuthPage() {
                   <div className="space-y-2">
                     <Button variant="outline" className="w-full gap-2" onClick={() => handleSocialSignIn('google')} disabled={isSubmitting}>
                         <GoogleIcon /> Sign up with Google
-                    </Button>
-                    <Button variant="outline" className="w-full gap-2" onClick={() => handleSocialSignIn('apple')} disabled={isSubmitting}>
-                        <AppleIcon className="text-foreground" /> Sign up with Apple
                     </Button>
                   </div>
                 </form>

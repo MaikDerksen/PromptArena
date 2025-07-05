@@ -39,7 +39,7 @@ export default function ViewerPage() {
               <CardDescription className="text-lg">Status:</CardDescription>
               <GameStatusBadge status={game.status} className="text-md px-4 py-1.5" />
             </div>
-            {game.status === 'active' && <RoundTimer endTime={game.roundEndsAt} status={game.status} className="text-primary text-lg"/>}
+            {game.status === 'active' && <RoundTimer endTime={game.roundEndsAt ?? null} status={game.status} className="text-primary text-lg"/>}
           </div>
         </CardHeader>
         <CardContent>

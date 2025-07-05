@@ -55,7 +55,6 @@ const generateImageFlow = ai.defineFlow(
       response = await ai.generate({
         model: `googleai/${model}`,
         prompt: input.prompt,
-        output: {format: 'media'},
       });
     }
 

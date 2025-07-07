@@ -149,7 +149,7 @@ function BuyCreditsPageContent() {
     <div className="space-y-8">
       <Card className="shadow-xl">
         <CardHeader>
-          <CardTitle className="font-headline text-3xl flex items-center gap-2">
+          <CardTitle className="font-headline text-2xl md:text-3xl flex items-center gap-2">
             <CreditCard className="w-8 h-8 text-primary" /> Buy Credits
           </CardTitle>
           <CardDescription>
@@ -176,7 +176,7 @@ function BuyCreditsPageContent() {
           <Card key={pkg.id} className="flex flex-col hover:shadow-primary/20 hover:shadow-lg transition-shadow duration-300">
             <CardHeader className="items-center text-center">
               {pkg.icon}
-              <CardTitle className="text-2xl font-headline mt-2">{pkg.name}</CardTitle>
+              <CardTitle className="text-xl md:text-2xl font-headline mt-2">{pkg.name}</CardTitle>
               <CardDescription>{pkg.description}</CardDescription>
             </CardHeader>
             <CardContent className="flex-grow text-center">

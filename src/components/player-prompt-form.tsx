@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
@@ -113,7 +114,7 @@ export default function PlayerPromptForm({ playerKey, playerName }: PlayerPrompt
         <CardHeader>
           <div className="flex justify-between items-center flex-wrap gap-2">
             <div>
-              <CardTitle className="font-headline text-3xl">{playerName}'s Turn</CardTitle>
+              <CardTitle className="font-headline text-2xl md:text-3xl">{playerName}'s Turn</CardTitle>
               <CardDescription>The current central prompt is: <strong className="text-primary">{game.prompt || "Waiting for admin..."}</strong></CardDescription>
             </div>
             {isRoundActive && <RoundTimer endTime={game.roundEndsAt ?? null} status={game.status} className="text-lg text-primary" />}
@@ -136,7 +137,7 @@ export default function PlayerPromptForm({ playerKey, playerName }: PlayerPrompt
                 This round has ended. Wait for the admin to start a new one.
               </AlertDescription>
             </Alert>
-          )}
+           )}
            {isRoundActive && hasSubmitted && (
              <Alert variant="default" className="mt-4 bg-green-500/10 border-green-500/50">
                 <CheckCircle className="h-4 w-4 text-green-500" />
@@ -177,7 +178,7 @@ export default function PlayerPromptForm({ playerKey, playerName }: PlayerPrompt
             {error && <Alert variant="destructive"><AlertCircle className="h-4 w-4" /><AlertTitle>Submission Error</AlertTitle><AlertDescription>{error}</AlertDescription></Alert>}
             <Button 
               type="submit" 
-              className="w-full text-lg py-6" 
+              className="w-full text-lg py-4 md:py-6" 
               disabled={!promptInput.trim() || isSubmitting || !canSubmit}
             >
               {isSubmitting ? <><LoadingSpinner className="mr-2" /> Submitting & Generating...</> : 'Submit & Generate'}

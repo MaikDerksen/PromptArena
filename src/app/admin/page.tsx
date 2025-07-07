@@ -189,8 +189,8 @@ function AdminPageContent() {
     <div className="space-y-8">
       <Card className="shadow-xl">
         <CardHeader>
-          <CardTitle className="font-headline text-3xl">Admin Control Panel</CardTitle>
-          <div className="flex items-center justify-between mt-2">
+          <CardTitle className="font-headline text-2xl md:text-3xl">Admin Control Panel</CardTitle>
+          <div className="flex items-center justify-between mt-2 flex-wrap gap-y-2">
             <div className="flex items-center gap-4">
               <div className="flex items-center gap-2">
                 <CardDescription>Status:</CardDescription>

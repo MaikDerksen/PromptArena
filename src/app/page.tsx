@@ -1,3 +1,4 @@
+
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Users, Eye, ShieldCheck, Gamepad2 } from "lucide-react";
@@ -7,10 +8,10 @@ export default function Home() {
   return (
     <div className="flex flex-col items-center justify-center text-center">
       <Gamepad2 className="w-24 h-24 text-primary mb-6" />
-      <h1 className="text-5xl font-headline font-bold mb-4">
+      <h1 className="text-4xl md:text-5xl font-headline font-bold mb-4">
         Welcome to PromptArena!
       </h1>
-      <p className="text-xl text-muted-foreground mb-12 max-w-2xl">
+      <p className="text-lg md:text-xl text-muted-foreground mb-12 max-w-2xl">
         Engage in epic 2v2 text-to-image battles. Craft your prompts, witness AI magic, and compete for visual supremacy.
       </p>
 

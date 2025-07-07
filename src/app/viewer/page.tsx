@@ -31,7 +31,7 @@ export default function ViewerPage() {
     <div className="space-y-8">
       <Card className="text-center shadow-xl border-primary border-2">
         <CardHeader>
-          <CardTitle className="font-headline text-4xl flex items-center justify-center gap-3">
+          <CardTitle className="font-headline text-3xl md:text-4xl flex items-center justify-center gap-3">
             <Tv className="w-10 h-10 text-primary"/> PromptArena Viewer
           </CardTitle>
           <div className="flex items-center justify-center flex-wrap gap-x-4 gap-y-2 mt-2">
@@ -44,7 +44,7 @@ export default function ViewerPage() {
         </CardHeader>
         <CardContent>
           <p className="text-sm text-muted-foreground mb-1">Central Prompt:</p>
-          <h2 className="text-3xl font-bold font-headline text-primary break-words">
+          <h2 className="text-2xl md:text-3xl font-bold font-headline text-primary break-words">
             {game.prompt || "Waiting for admin to set a prompt..."}
           </h2>
            {game.status === 'active' && !game.imagesRevealed && (!!game.playerOneImage || !!game.playerTwoImage) && (

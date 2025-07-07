@@ -107,7 +107,7 @@ function GalleryPageContent() {
     <div className="space-y-8">
       <Card className="text-center shadow-xl border-primary border-2">
         <CardHeader>
-          <CardTitle className="font-headline text-4xl flex items-center justify-center gap-3">
+          <CardTitle className="font-headline text-3xl md:text-4xl flex items-center justify-center gap-3">
             <Palette className="w-10 h-10 text-primary" /> My Image Gallery
           </CardTitle>
           <CardDescription>A collection of all the images you have generated in PromptArena.</CardDescription>
@@ -134,9 +134,9 @@ function GalleryPageContent() {
                 <Image
                   src={image.imageUrl}
                   alt={image.prompt}
-                  layout="fill"
-                  objectFit="cover"
-                  className="transition-transform duration-300 group-hover:scale-105"
+                  fill
+                  sizes="(max-width: 768px) 50vw, (max-width: 1024px) 33vw, (max-width: 1280px) 25vw, 20vw"
+                  className="object-cover transition-transform duration-300 group-hover:scale-105"
                   data-ai-hint="gallery abstract"
                 />
               </div>
@@ -150,7 +150,7 @@ function GalleryPageContent() {
 
       {selectedImage && (
         <Dialog open={!!selectedImage} onOpenChange={(isOpen) => !isOpen && setSelectedImage(null)}>
-          <DialogContent className="max-w-4xl">
+          <DialogContent className="max-w-4xl w-[95vw] sm:w-full">
             <DialogHeader>
               <DialogTitle>Image Details</DialogTitle>
             </DialogHeader>
@@ -159,8 +159,8 @@ function GalleryPageContent() {
                     <Image 
                         src={selectedImage.imageUrl} 
                         alt={selectedImage.prompt} 
-                        layout="fill"
-                        objectFit="contain"
+                        fill
+                        className="object-contain"
                     />
                 </div>
                 <div className="space-y-4">

@@ -150,7 +150,6 @@ Follow these steps to get PromptArena running on your local machine:
 
 6.  **Environment Variables**:
     *   In the root directory of your cloned project, create a new file named `.env`.
-    *   Copy the contents from `.env.example` (also in the root of the project) into your new `.env` file.
     *   Fill in the placeholder values:
 
         ```env

@@ -162,6 +162,11 @@ Follow these steps to get PromptArena running on your local machine:
         NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID="YOUR_FIREBASE_MESSAGING_SENDER_ID"
         NEXT_PUBLIC_FIREBASE_APP_ID="YOUR_FIREBASE_APP_ID"
 
+        # App URL (IMPORTANT for Production)
+        # For local development, use your local server address (e.g., http://localhost:9002)
+        # For production, set this to your custom domain (e.g., https://promptarena.de)
+        NEXT_PUBLIC_APP_URL="http://localhost:9002"
+
         # Google AI (Gemini) API Key
         GOOGLE_API_KEY="YOUR_GEMINI_API_KEY_HERE"
 

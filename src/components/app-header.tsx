@@ -7,7 +7,7 @@ import { Gamepad2, LogIn, LogOut, CreditCard, Menu, Eye, User, ShieldCheck } fro
 import { useAuth } from '@/contexts/auth-context';
 import { useRouter } from 'next/navigation';
 import { useToast } from '@/hooks/use-toast';
-import { Sheet, SheetContent, SheetTrigger, SheetClose } from '@/components/ui/sheet';
+import { Sheet, SheetContent, SheetTrigger, SheetClose, SheetHeader, SheetTitle, SheetDescription } from '@/components/ui/sheet';
 import { useState } from 'react';
 import { Separator } from '@/components/ui/separator';
 
@@ -86,6 +86,10 @@ export default function AppHeader() {
               </Button>
             </SheetTrigger>
             <SheetContent side="right">
+              <SheetHeader className="sr-only">
+                <SheetTitle>Navigation Menu</SheetTitle>
+                <SheetDescription>Main navigation links for PromptArena.</SheetDescription>
+              </SheetHeader>
               <nav className="grid gap-4 text-lg font-medium mt-8">
                 <SheetClose asChild>
                     <Link href="/" className="flex items-center gap-2 text-primary hover:text-primary/90 transition-colors mb-4">

@@ -15,6 +15,7 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
@@ -54,20 +55,27 @@ function GalleryPageContent() {
     fetchImages();
   }, [currentUser]);
 
-  const handleDownload = (imageUrl: string, prompt: string) => {
+  const handleDownload = async (imageUrl: string, prompt: string) => {
     try {
       const sanitizedPrompt = prompt.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '').slice(0, 50);
       const filename = `promptarena-${sanitizedPrompt || 'image'}.png`;
       
-      // Use our server-side proxy to bypass CORS issues.
       const downloadUrl = `/api/download-image?url=${encodeURIComponent(imageUrl)}&filename=${encodeURIComponent(filename)}`;
+      
+      const response = await fetch(downloadUrl);
+      if (!response.ok) {
+        throw new Error(`Download proxy failed: ${response.statusText}`);
+      }
 
-      // Create a temporary link element and click it to trigger the download.
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
-      link.href = downloadUrl;
+      link.href = url;
+      link.setAttribute('download', filename);
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
 
     } catch (err) {
       console.error('Download initiation error:', err);
@@ -76,7 +84,6 @@ function GalleryPageContent() {
         description: "Could not start the download process. As a fallback, you can open the image in a new tab and save it manually.",
         variant: "destructive",
       });
-      // Fallback for any unexpected errors with the proxy approach
       window.open(imageUrl, '_blank', 'noopener,noreferrer');
     }
   };
@@ -110,7 +117,7 @@ function GalleryPageContent() {
           <CardTitle className="font-headline text-3xl md:text-4xl flex items-center justify-center gap-3">
             <Palette className="w-10 h-10 text-primary" /> My Image Gallery
           </CardTitle>
-          <CardDescription>A collection of all the images you have generated in PromptArena.</CardDescription>
+          <CardDescription className="text-base md:text-lg">A collection of all the images you have generated in PromptArena.</CardDescription>
         </CardHeader>
       </Card>
 
@@ -153,6 +160,9 @@ function GalleryPageContent() {
           <DialogContent className="max-w-4xl w-[95vw] sm:w-full">
             <DialogHeader>
               <DialogTitle>Image Details</DialogTitle>
+              <DialogDescription className="sr-only">
+                Detailed view of your generated image, its prompt, and other metadata.
+              </DialogDescription>
             </DialogHeader>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 py-4">
                 <div className="aspect-square w-full bg-muted rounded-md flex items-center justify-center overflow-hidden relative">

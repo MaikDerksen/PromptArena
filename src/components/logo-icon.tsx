@@ -8,31 +8,47 @@ export const LogoIcon = (props: React.SVGProps<SVGSVGElement>) => (
     {...props}
   >
     <defs>
-      <linearGradient id="logo-blue-gradient" x1="0" y1="0" x2="1" y2="1">
-        <stop stopColor="#29ABE2" />
-        <stop offset="1" stopColor="#1C8CBF" />
+      <linearGradient
+        id="logo-blue-swoosh"
+        x1="12.5"
+        y1="12"
+        x2="49"
+        y2="51"
+        gradientUnits="userSpaceOnUse"
+      >
+        <stop stopColor="hsl(var(--primary))" />
+        <stop offset="1" stopColor="hsl(var(--primary))" stopOpacity="0.7" />
       </linearGradient>
-      <linearGradient id="logo-orange-gradient" x1="0" y1="0" x2="1" y2="1">
-        <stop stopColor="#FF5733" />
-        <stop offset="1" stopColor="#E04A27" />
+      <linearGradient
+        id="logo-orange-swoosh"
+        x1="51.5"
+        y1="12"
+        x2="15"
+        y2="51"
+        gradientUnits="userSpaceOnUse"
+      >
+        <stop stopColor="hsl(var(--accent))" />
+        <stop offset="1" stopColor="hsl(var(--accent))" stopOpacity="0.7" />
       </linearGradient>
     </defs>
-    <path
-      d="M52 4H12C7.58172 4 4 7.58172 4 12V52C4 56.4183 7.58172 60 12 60H52C56.4183 60 60 56.4183 60 52V12C60 7.58172 56.4183 4 52 4Z"
-      stroke="hsl(var(--primary))"
+    <circle
+      cx="32"
+      cy="32"
+      r="28"
+      stroke="hsl(var(--border))"
       strokeWidth="4"
     />
     <path
-      d="M23 21L33 32L23 43"
-      stroke="url(#logo-blue-gradient)"
-      strokeWidth="6"
+      d="M16 48C24 32 48 48 48 16"
+      stroke="url(#logo-blue-swoosh)"
+      strokeWidth="8"
       strokeLinecap="round"
       strokeLinejoin="round"
     />
     <path
-      d="M41 21L31 32L41 43"
-      stroke="url(#logo-orange-gradient)"
-      strokeWidth="6"
+      d="M48 48C40 32 16 48 16 16"
+      stroke="url(#logo-orange-swoosh)"
+      strokeWidth="8"
       strokeLinecap="round"
       strokeLinejoin="round"
     />

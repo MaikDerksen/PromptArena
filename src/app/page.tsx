@@ -1,13 +1,14 @@
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Users, Eye, ShieldCheck, Gamepad2 } from "lucide-react";
+import { Users, Eye, ShieldCheck } from "lucide-react";
 import Link from "next/link";
+import { LogoIcon } from "@/components/logo-icon";
 
 export default function Home() {
   return (
     <div className="flex flex-col items-center justify-center text-center">
-      <Gamepad2 className="w-24 h-24 text-primary mb-6" />
+      <LogoIcon className="w-24 h-24 text-primary mb-6" />
       <h1 className="text-4xl md:text-5xl font-headline font-bold mb-4">
         Welcome to PromptArena!
       </h1>

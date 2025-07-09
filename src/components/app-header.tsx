@@ -3,13 +3,14 @@
 
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
-import { Gamepad2, LogIn, LogOut, CreditCard, Menu, Eye, User, ShieldCheck } from 'lucide-react';
+import { LogIn, LogOut, CreditCard, Menu, Eye, User, ShieldCheck } from 'lucide-react';
 import { useAuth } from '@/contexts/auth-context';
 import { useRouter } from 'next/navigation';
 import { useToast } from '@/hooks/use-toast';
 import { Sheet, SheetContent, SheetTrigger, SheetClose, SheetHeader, SheetTitle, SheetDescription } from '@/components/ui/sheet';
 import { useState } from 'react';
 import { Separator } from '@/components/ui/separator';
+import { LogoIcon } from './logo-icon';
 
 export default function AppHeader() {
   const { currentUser, userProfile, logout } = useAuth();
@@ -40,7 +41,7 @@ export default function AppHeader() {
     <header className="bg-card border-b border-border shadow-md sticky top-0 z-30">
       <div className="container mx-auto px-4 py-3 flex items-center justify-between">
         <Link href="/" className="flex items-center gap-2 text-primary hover:text-primary/90 transition-colors">
-          <Gamepad2 className="h-8 w-8" />
+          <LogoIcon className="h-8 w-8" />
           <h1 className="text-xl sm:text-2xl font-headline font-bold">PromptArena</h1>
         </Link>
         
@@ -86,14 +87,14 @@ export default function AppHeader() {
               </Button>
             </SheetTrigger>
             <SheetContent side="right">
-              <SheetHeader className="sr-only">
-                <SheetTitle>Navigation Menu</SheetTitle>
-                <SheetDescription>Main navigation links for PromptArena.</SheetDescription>
+              <SheetHeader>
+                <SheetTitle className="sr-only">Navigation Menu</SheetTitle>
+                <SheetDescription className="sr-only">Main navigation links for PromptArena.</SheetDescription>
               </SheetHeader>
               <nav className="grid gap-4 text-lg font-medium mt-8">
                 <SheetClose asChild>
                     <Link href="/" className="flex items-center gap-2 text-primary hover:text-primary/90 transition-colors mb-4">
-                        <Gamepad2 className="h-8 w-8" />
+                        <LogoIcon className="h-8 w-8" />
                         <h1 className="text-2xl font-headline font-bold">PromptArena</h1>
                     </Link>
                 </SheetClose>

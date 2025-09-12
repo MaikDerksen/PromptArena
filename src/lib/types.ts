@@ -1,4 +1,3 @@
-
 import type { Timestamp } from 'firebase/firestore';
 
 export type GameStatus = "waiting" | "active" | "completed";
@@ -21,9 +20,15 @@ export interface Game {
   imagesRevealed?: boolean;
   imageModel?: string;
 
-  // New timer fields
+  // Timer fields
   roundDuration?: number; // in seconds
   roundEndsAt?: Timestamp | Date | null;
+
+  // QR Code Session fields
+  playerOneAccessToken?: string;
+  playerTwoAccessToken?: string;
+  playerOneConnected?: boolean;
+  playerTwoConnected?: boolean;
 }
 
 export type PlayerKey = "playerOne" | "playerTwo";

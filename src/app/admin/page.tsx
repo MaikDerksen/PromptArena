@@ -23,7 +23,7 @@ import { useGame, IMAGE_MODELS } from '@/hooks/use-game';
 import LoadingSpinner from '@/components/loading-spinner';
 import ImageCard from '@/components/image-card';
 import GameStatusBadge from '@/components/game-status-badge';
-import { AlertCircle, Edit3, Play, RotateCcw, SkipForward, Eye, UserCheck, UserX, Image as ImageIcon, CheckCircle, Wifi, HelpCircle, CreditCard, Settings, Timer, Trash2, GalleryThumbnails } from 'lucide-react';
+import { AlertCircle, Edit3, Play, RotateCcw, SkipForward, Eye, UserCheck, UserX, Image as ImageIcon, CheckCircle, Wifi, HelpCircle, CreditCard, Settings, Timer, Trash2, GalleryThumbnails, QrCode } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Timestamp } from 'firebase/firestore';
 import { generateImage } from '@/ai/flows/generate-image'; 
@@ -32,6 +32,7 @@ import { useAuth } from '@/contexts/auth-context';
 import { useToast } from '@/hooks/use-toast';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import RoundTimer from '@/components/round-timer';
+import { QRCodeSVG } from 'qrcode.react';
 
 const formatLastSeen = (lastSeen: Timestamp | Date | null): {text: string, icon: JSX.Element} => {
   if (!lastSeen) return { text: "Never active", icon: <UserX className="text-destructive h-4 w-4" /> };
@@ -49,7 +50,7 @@ const formatLastSeen = (lastSeen: Timestamp | Date | null): {text: string, icon:
 
 
 function AdminPageContent() {
-  const { game, loading: gameLoading, error: gameError, setCentralPrompt, startRound, updateGameStatus, revealImages, resetRound, resetGame, setImageModel } = useGame();
+  const { game, loading: gameLoading, error: gameError, setCentralPrompt, startRound, updateGameStatus, revealImages, resetRound, resetGame, setImageModel, generateNewSessionCodes } = useGame();
   const { userProfile, loading: authLoading, deleteCurrentUserAccount } = useAuth();
   const { toast } = useToast();
   
@@ -59,11 +60,20 @@ function AdminPageContent() {
   const [isRevealingImages, setIsRevealingImages] = useState(false);
   const [isStartingRound, setIsStartingRound] = useState(false);
   const [isDeletingAccount, setIsDeletingAccount] = useState(false);
+  const [isGeneratingCodes, setIsGeneratingCodes] = useState(false);
 
   const [roundDuration, setRoundDuration] = useState('60');
 
   const [isTestingApi, setIsTestingApi] = useState(false);
   const [apiTestResult, setApiTestResult] = useState<{success: boolean, message: string, imageUrl?: string, statusCode?: number} | null>(null);
+  
+  const [baseUrl, setBaseUrl] = useState('');
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      setBaseUrl(window.location.origin);
+    }
+  }, []);
 
   useEffect(() => {
     if (game) {
@@ -125,13 +135,23 @@ function AdminPageContent() {
     try {
       await deleteCurrentUserAccount();
       toast({ title: "Account Deleted", description: "Your account and all associated data have been permanently removed."});
-      // The user will be logged out and unauthenticated, they will be redirected by AuthGuard or context.
     } catch (error: any) {
       toast({ title: "Deletion Failed", description: error.message, variant: "destructive" });
     } finally {
       setIsDeletingAccount(false);
     }
   };
+
+  const handleGenerateCodes = async () => {
+    setIsGeneratingCodes(true);
+    try {
+      await generateNewSessionCodes();
+    } catch (error: any) {
+       toast({ title: "Code Generation Failed", description: error.message, variant: "destructive" });
+    } finally {
+      setIsGeneratingCodes(false);
+    }
+  }
 
   const handleTestApi = async () => {
     setIsTestingApi(true);
@@ -185,6 +205,9 @@ function AdminPageContent() {
   const playerTwoActivity = formatLastSeen(game.playerTwoLastSeen || null);
   const canRevealImages = (!!game.playerOneImage || !!game.playerTwoImage) && !game.imagesRevealed && (game.status === 'active' || game.status === 'completed');
 
+  const playerOneJoinUrl = baseUrl && game.playerOneAccessToken ? `${baseUrl}/player-one?token=${game.playerOneAccessToken}` : '';
+  const playerTwoJoinUrl = baseUrl && game.playerTwoAccessToken ? `${baseUrl}/player-two?token=${game.playerTwoAccessToken}` : '';
+
   return (
     <div className="space-y-8">
       <Card className="shadow-xl">
@@ -205,6 +228,48 @@ function AdminPageContent() {
             </div>
           </div>
         </CardHeader>
+      </Card>
+      
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2"><QrCode className="text-primary"/> QR Code Session Management</CardTitle>
+          <CardDescription>Generate unique QR codes for players to join without an account. New codes invalidate old ones and disconnect current players.</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <Button onClick={handleGenerateCodes} disabled={isGeneratingCodes}>
+            {isGeneratingCodes ? <><LoadingSpinner className="mr-2"/> Generating...</> : 'Generate New Session Codes'}
+          </Button>
+          {(game.playerOneAccessToken || game.playerTwoAccessToken) && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 pt-4">
+              <div className="text-center space-y-2">
+                <h3 className="font-semibold">Player One Join Link</h3>
+                {playerOneJoinUrl ? (
+                  <>
+                    <div className="p-4 bg-white rounded-lg inline-block">
+                      <QRCodeSVG value={playerOneJoinUrl} size={160} />
+                    </div>
+                    <p className={cn("text-xs font-mono break-all p-2 bg-muted rounded-md", { 'text-green-500': game.playerOneConnected, 'text-red-500': !game.playerOneConnected })}>
+                      Status: {game.playerOneConnected ? 'Connected' : 'Waiting for Player'}
+                    </p>
+                  </>
+                ) : <LoadingSpinner />}
+              </div>
+              <div className="text-center space-y-2">
+                <h3 className="font-semibold">Player Two Join Link</h3>
+                 {playerTwoJoinUrl ? (
+                  <>
+                    <div className="p-4 bg-white rounded-lg inline-block">
+                      <QRCodeSVG value={playerTwoJoinUrl} size={160} />
+                    </div>
+                     <p className={cn("text-xs font-mono break-all p-2 bg-muted rounded-md", { 'text-green-500': game.playerTwoConnected, 'text-red-500': !game.playerTwoConnected })}>
+                      Status: {game.playerTwoConnected ? 'Connected' : 'Waiting for Player'}
+                    </p>
+                  </>
+                ) : <LoadingSpinner />}
+              </div>
+            </div>
+          )}
+        </CardContent>
       </Card>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">

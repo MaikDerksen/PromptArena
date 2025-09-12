@@ -21,9 +21,10 @@ import RoundTimer from './round-timer';
 interface PlayerPromptFormProps {
   playerKey: PlayerKey;
   playerName: string;
+  sessionUserId: string | null; // Can be a session ID or null
 }
 
-export default function PlayerPromptForm({ playerKey, playerName }: PlayerPromptFormProps) {
+export default function PlayerPromptForm({ playerKey, playerName, sessionUserId }: PlayerPromptFormProps) {
   const { game, submitPlayerPrompt, updatePlayerTypingPrompt, updatePlayerLastSeen, loading: gameLoading } = useGame();
   const { currentUser, userProfile, loading: authLoading } = useAuth();
   const { toast } = useToast();
@@ -35,16 +36,16 @@ export default function PlayerPromptForm({ playerKey, playerName }: PlayerPrompt
   const finalSubmittedPrompt = playerKey === 'playerOne' ? game?.playerOnePrompt : game?.playerTwoPrompt;
   const currentImage = playerKey === 'playerOne' ? game?.playerOneImage : game?.playerTwoImage;
   const hasSubmitted = !!finalSubmittedPrompt;
+  
+  const effectiveUserId = sessionUserId || currentUser?.uid;
 
   useEffect(() => {
-    if (currentUser) {
-      updatePlayerLastSeen(playerKey);
+    if (effectiveUserId) {
+      updatePlayerLastSeen(playerKey, effectiveUserId);
     }
-  }, [playerKey, updatePlayerLastSeen, currentUser]);
+  }, [playerKey, updatePlayerLastSeen, effectiveUserId]);
   
   useEffect(() => {
-    // When a round is reset, the final prompt is cleared in Firestore.
-    // This effect listens for that change and clears the local text input.
     if (!finalSubmittedPrompt) {
       setPromptInput('');
     }
@@ -52,24 +53,24 @@ export default function PlayerPromptForm({ playerKey, playerName }: PlayerPrompt
 
   const debouncedUpdateTypingPrompt = useCallback(
     debounce((player: PlayerKey, pInput: string) => {
-      if (currentUser && game?.status === 'active' && !hasSubmitted) { 
-        updatePlayerTypingPrompt(player, pInput);
+      if (effectiveUserId && game?.status === 'active' && !hasSubmitted) { 
+        updatePlayerTypingPrompt(player, pInput, effectiveUserId);
       }
     }, 500), 
-    [updatePlayerTypingPrompt, game?.status, currentUser, hasSubmitted] 
+    [updatePlayerTypingPrompt, game?.status, effectiveUserId, hasSubmitted] 
   );
 
   const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const newPrompt = e.target.value;
     setPromptInput(newPrompt);
-    if (currentUser && game?.status === 'active') {
+    if (effectiveUserId && game?.status === 'active') {
       debouncedUpdateTypingPrompt(playerKey, newPrompt);
     }
   };
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    if (!currentUser || !userProfile) {
+    if (!effectiveUserId) {
       toast({title: "Not Logged In", description: "You must be logged in to submit a prompt.", variant: "destructive"});
       return;
     }
@@ -83,7 +84,7 @@ export default function PlayerPromptForm({ playerKey, playerName }: PlayerPrompt
     setError(null);
     setIsSubmitting(true);
     try {
-      await submitPlayerPrompt(playerKey, promptInput);
+      await submitPlayerPrompt(playerKey, promptInput, effectiveUserId);
     } catch (err: any) {      
       setError(err.message || "Failed to submit prompt or generate image.");
     } finally {
@@ -91,7 +92,7 @@ export default function PlayerPromptForm({ playerKey, playerName }: PlayerPrompt
     }
   };
   
-  const loading = gameLoading || authLoading;
+  const loading = gameLoading || (authLoading && !sessionUserId);
 
   if (loading) {
     return <div className="flex justify-center items-center h-64"><LoadingSpinner className="w-12 h-12" /> <span className="ml-2">Loading game...</span></div>;
@@ -100,8 +101,8 @@ export default function PlayerPromptForm({ playerKey, playerName }: PlayerPrompt
   if (!game) {
     return <Alert variant="destructive"><AlertCircle className="h-4 w-4" /><AlertTitle>Error</AlertTitle><AlertDescription>Game data could not be loaded. Please try again later.</AlertDescription></Alert>;
   }
-   if (!currentUser || !userProfile) {
-    return <Alert variant="destructive"><AlertCircle className="h-4 w-4" /><AlertTitle>Access Denied</AlertTitle><AlertDescription>You must be logged in to access this page.</AlertDescription></Alert>;
+   if (!effectiveUserId) {
+    return <Alert variant="destructive"><AlertCircle className="h-4 w-4" /><AlertTitle>Access Denied</AlertTitle><AlertDescription>You must be logged in or use a valid session link to access this page.</AlertDescription></Alert>;
   }
   
   const isRoundActive = game.status === 'active';
@@ -153,7 +154,7 @@ export default function PlayerPromptForm({ playerKey, playerName }: PlayerPrompt
               <AlertTitle>Time's Up!</AlertTitle>
               <AlertDescription>
                 The time for this round has ended. You can no longer submit a prompt.
-              </AlertDescription>
+              </Description>
             </Alert>
            )}
         </CardHeader>

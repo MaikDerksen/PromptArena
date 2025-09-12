@@ -1,12 +1,11 @@
-
 import { useState, useEffect, useCallback } from 'react';
 import { doc, setDoc, onSnapshot, serverTimestamp, updateDoc, Timestamp, runTransaction, collection, addDoc } from 'firebase/firestore';
-import { ref as storageRef, uploadString, getDownloadURL, deleteObject } from 'firebase/storage';
+import { ref as storageRef, uploadString, getDownloadURL } from 'firebase/storage';
 import { db, storage } from '@/lib/firebase';
-import type { Game, GameStatus, PlayerKey, UserProfile, GeneratedImage } from '@/lib/types';
+import type { Game, GameStatus, PlayerKey, GeneratedImage } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
 import { generateImage as genImageFlow } from '@/ai/flows/generate-image';
-import { useAuth } from '@/contexts/auth-context'; // Import useAuth
+import { useAuth } from '@/contexts/auth-context';
 
 const GAME_ID = "default-game"; 
 
@@ -47,6 +46,10 @@ const defaultGameData: Game = {
   imageModel: 'gemini-2.0-flash-preview-image-generation',
   roundDuration: 60,
   roundEndsAt: null,
+  playerOneAccessToken: "",
+  playerTwoAccessToken: "",
+  playerOneConnected: false,
+  playerTwoConnected: false,
 };
 
 export function useGame() {
@@ -54,7 +57,7 @@ export function useGame() {
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const { toast } = useToast();
-  const { currentUser, userProfile, refreshUserProfile } = useAuth(); // Get user from AuthContext
+  const { currentUser, userProfile, refreshUserProfile } = useAuth();
 
   useEffect(() => {
     setLoading(true);
@@ -85,10 +88,6 @@ export function useGame() {
   }, [toast]);
 
   const updateGameData = useCallback(async (data: Partial<Game>) => {
-    if (!currentUser) {
-        toast({ title: "Authentication Error", description: "You must be logged in to update game data.", variant: "destructive" });
-        return;
-    }
     const gameDocRef = doc(db, "games", GAME_ID);
     try {
       await updateDoc(gameDocRef, { ...data, updatedAt: serverTimestamp() });
@@ -97,7 +96,7 @@ export function useGame() {
       toast({ title: "Error", description: "Failed to update game.", variant: "destructive" });
       throw e; 
     }
-  }, [toast, currentUser]);
+  }, [toast]);
 
   const setCentralPrompt = useCallback(async (prompt: string) => {
     await updateGameData({ prompt });
@@ -108,8 +107,8 @@ export function useGame() {
     toast({title: "Model Updated", description: "Image generation model has been changed."});
   }, [updateGameData, toast]);
 
-  const updatePlayerLastSeen = useCallback(async (player: PlayerKey) => {
-    if (!currentUser) return; 
+  const updatePlayerLastSeen = useCallback(async (player: PlayerKey, userId: string | null = null) => {
+    if (!userId && !currentUser) return;
     const lastSeenField = player === "playerOne" ? "playerOneLastSeen" : "playerTwoLastSeen";
     try {
       const gameDocRef = doc(db, "games", GAME_ID);
@@ -120,8 +119,8 @@ export function useGame() {
     }
   }, [currentUser, toast]);
 
-  const updatePlayerTypingPrompt = useCallback(async (player: PlayerKey, typingPrompt: string) => {
-    if (!currentUser) return;
+  const updatePlayerTypingPrompt = useCallback(async (player: PlayerKey, typingPrompt: string, userId: string | null = null) => {
+    if (!userId && !currentUser) return;
     const typingField = player === "playerOne" ? "playerOneTypingPrompt" : "playerTwoTypingPrompt";
     const lastSeenField = player === "playerOne" ? "playerOneLastSeen" : "playerTwoLastSeen";
     
@@ -140,17 +139,32 @@ export function useGame() {
   }, [currentUser, toast]);
 
 
-  const submitPlayerPrompt = useCallback(async (player: PlayerKey, playerPrompt: string) => {
-    if (!currentUser || !userProfile) {
+  const submitPlayerPrompt = useCallback(async (player: PlayerKey, playerPrompt: string, userId: string) => {
+    if (!userProfile && !userId) {
       toast({ title: "Authentication Error", description: "You must be logged in to submit a prompt.", variant: "destructive" });
       throw new Error("User not authenticated");
     }
     
     const gameModel = game?.imageModel || 'gemini-2.0-flash-preview-image-generation';
     const cost = IMAGE_MODELS[gameModel as keyof typeof IMAGE_MODELS]?.cost || 1;
+    
+    let effectiveUserId = userId;
+    let effectiveUserProfile = userProfile;
 
-    if (userProfile.credits < cost) {
-      toast({ title: "Insufficient Credits", description: "You do not have enough credits to generate an image.", variant: "destructive" });
+    if (userId.startsWith('session-')) {
+        // This is a session-based user, find the admin's profile for credits
+        // Note: This assumes only one admin user. A more robust solution might store admin UIDs.
+        // For this app, let's assume the first user profile we find is the admin. This needs improvement in a real multi-admin scenario.
+        if(!currentUser || !userProfile) {
+             toast({ title: "Error", description: "Admin must be logged in to fund session players.", variant: "destructive" });
+             throw new Error("Admin not logged in for session player");
+        }
+        effectiveUserId = currentUser.uid;
+        effectiveUserProfile = userProfile;
+    }
+    
+    if (effectiveUserProfile && effectiveUserProfile.credits < cost) {
+      toast({ title: "Insufficient Credits", description: "The host does not have enough credits to generate an image.", variant: "destructive" });
       throw new Error("Insufficient credits");
     }
 
@@ -176,13 +190,13 @@ export function useGame() {
       }
       
       const imageFileName = `${player}-${Date.now()}.png`;
-      const imagePath = `user-images/${currentUser.uid}/default-game/${imageFileName}`;
+      const imagePath = `user-images/${effectiveUserId}/default-game/${imageFileName}`;
       const sRef = storageRef(storage, imagePath);
       
       const uploadResult = await uploadString(sRef, imageDataUri, 'data_url');
       const downloadURL = await getDownloadURL(uploadResult.ref);
 
-      const userDocRef = doc(db, 'users', currentUser.uid);
+      const userDocRef = doc(db, 'users', effectiveUserId);
       await runTransaction(db, async (transaction) => {
         const userDocSnap = await transaction.get(userDocRef);
         if (!userDocSnap.exists()) {
@@ -196,9 +210,8 @@ export function useGame() {
         transaction.update(gameDocRef, { [imageField]: downloadURL, [lastSeenField]: serverTimestamp(), updatedAt: serverTimestamp() });
       });
 
-      // Save image details to the new collection for the gallery
       const generatedImageData: GeneratedImage = {
-          userId: currentUser.uid,
+          userId: effectiveUserId,
           imageUrl: downloadURL,
           prompt: playerPrompt,
           playerKey: player,
@@ -281,6 +294,35 @@ export function useGame() {
     }
   }, [toast, game?.createdAt]);
 
+  const generateNewSessionCodes = useCallback(async () => {
+    const generateToken = () => Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+    const playerOneToken = generateToken();
+    const playerTwoToken = generateToken();
+    
+    await updateGameData({
+      playerOneAccessToken: playerOneToken,
+      playerTwoAccessToken: playerTwoToken,
+      playerOneConnected: false,
+      playerTwoConnected: false,
+    });
+    
+    toast({ title: "New Session Codes Generated", description: "Previous player links are now invalid." });
+    return { playerOneToken, playerTwoToken };
+  }, [updateGameData, toast]);
 
-  return { game, loading, error, setCentralPrompt, submitPlayerPrompt, updatePlayerTypingPrompt, startRound, updateGameStatus, revealImages, resetRound, resetGame, updatePlayerLastSeen, setImageModel };
+  const connectPlayerWithToken = useCallback(async (playerKey: PlayerKey) => {
+    const gameDocRef = doc(db, "games", GAME_ID);
+    const connectionField = playerKey === 'playerOne' ? 'playerOneConnected' : 'playerTwoConnected';
+    await updateDoc(gameDocRef, { [connectionField]: true, updatedAt: serverTimestamp() });
+  }, []);
+
+  const disconnectPlayer = useCallback(async (playerKey: PlayerKey) => {
+    const gameDocRef = doc(db, "games", GAME_ID);
+    const connectionField = playerKey === 'playerOne' ? 'playerOneConnected' : 'playerTwoConnected';
+    const lastSeenField = playerKey === 'playerOne' ? 'playerOneLastSeen' : 'playerTwoLastSeen';
+    await updateDoc(gameDocRef, { [connectionField]: false, [lastSeenField]: serverTimestamp() });
+  }, []);
+
+
+  return { game, loading, error, setCentralPrompt, submitPlayerPrompt, updatePlayerTypingPrompt, startRound, updateGameStatus, revealImages, resetRound, resetGame, updatePlayerLastSeen, setImageModel, generateNewSessionCodes, connectPlayerWithToken, disconnectPlayer };
 }

@@ -351,8 +351,14 @@ export function useGame() {
   const disconnectPlayer = useCallback(async (playerKey: PlayerKey) => {
     const gameDocRef = doc(db, "games", GAME_ID);
     const connectionField = playerKey === 'playerOne' ? 'playerOneConnected' : 'playerTwoConnected';
-    const lastSeenField = playerKey === 'playerOne' ? 'playerOneLastSeen' : 'playerTwoLastSeen';
-    await updateDoc(gameDocRef, { [connectionField]: false, [lastSeenField]: serverTimestamp() });
+    try {
+      await updateDoc(gameDocRef, { 
+        [connectionField]: false,
+        updatedAt: serverTimestamp() 
+      });
+    } catch (e) {
+      console.error("Failed to disconnect player:", e);
+    }
   }, []);
 
 

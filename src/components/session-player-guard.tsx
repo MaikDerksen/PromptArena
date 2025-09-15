@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode, useCallback } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { useGame } from '@/hooks/use-game';
 import type { PlayerKey } from '@/lib/types';
@@ -24,61 +24,59 @@ export default function SessionPlayerGuard({ playerKey, children }: SessionPlaye
   const [isValidated, setIsValidated] = useState(false);
   const [accessError, setAccessError] = useState<string | null>(null);
   const [sessionUserId, setSessionUserId] = useState<string | null>(null);
-  const [isConnecting, setIsConnecting] = useState(false);
 
   useEffect(() => {
+    // Regular logged-in users don't need token validation.
     if (currentUser) {
       setIsValidated(true);
       return;
     }
 
+    // If there's no token and no user, they can't proceed.
     if (!token) {
-      setIsValidated(true);
+      setIsValidated(true); // Let AuthGuard handle the redirect.
       return;
     }
-
-    if (gameLoading || !game || isConnecting) {
+    
+    // Wait for game data to be available before checking the token.
+    if (gameLoading || !game) {
       return;
     }
 
     const expectedToken = playerKey === 'playerOne' ? game.playerOneAccessToken : game.playerTwoAccessToken;
-    
+
     if (token === expectedToken) {
-      setIsConnecting(true);
-      const newSessionId = `session-${playerKey}-${Date.now()}`;
+      const newSessionId = `session-${playerKey}-${token.slice(0, 8)}`;
       
       connectPlayerWithToken(playerKey).then((success) => {
         if (success) {
           setSessionUserId(newSessionId);
           setIsValidated(true);
-          setIsConnecting(false);
         } else {
           setAccessError('Failed to connect to the game session.');
           setIsValidated(true);
-          setIsConnecting(false);
         }
       });
     } else {
       setAccessError('Invalid or expired access token. Please get a new QR code from the admin.');
       setIsValidated(true);
     }
-  }, [token, game, playerKey, currentUser, gameLoading, connectPlayerWithToken, isConnecting]);
 
+    // This effect should only run once when the token and game are available.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [token, gameLoading, currentUser]);
+
+
+  // This separate effect handles cleanup ONLY when the component unmounts.
   useEffect(() => {
-    if (!sessionUserId) {
-      return;
+    // Only set up the cleanup if we have a valid session user.
+    if (sessionUserId) {
+      // This function will be returned and called ONLY on unmount.
+      return () => {
+        disconnectPlayer(playerKey);
+      };
     }
-
-    const handleBeforeUnload = () => {
-      disconnectPlayer(playerKey);
-    };
-
-    window.addEventListener('beforeunload', handleBeforeUnload);
-
-    return () => {
-      window.removeEventListener('beforeunload', handleBeforeUnload);
-      disconnectPlayer(playerKey);
-    };
+  // The stable disconnectPlayer function is a dependency.
   }, [sessionUserId, playerKey, disconnectPlayer]);
 
 

@@ -1,4 +1,3 @@
-
 'use client';
 import { Suspense } from 'react';
 import PlayerPromptForm from '@/components/player-prompt-form';
@@ -10,7 +9,7 @@ function PlayerOnePageContent() {
   return (
     <SessionPlayerGuard playerKey="playerOne">
       {(sessionUserId) => (
-        <AuthGuard>
+        <AuthGuard allowSession={!!sessionUserId}>
           <PlayerPromptForm 
             playerKey="playerOne" 
             playerName="Player One" 

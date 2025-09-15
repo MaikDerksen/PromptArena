@@ -1,6 +1,7 @@
+
 import { useState, useEffect, useCallback } from 'react';
-import { doc, setDoc, onSnapshot, serverTimestamp, updateDoc, Timestamp, runTransaction, collection, addDoc } from 'firebase/firestore';
-import { ref as storageRef, uploadString, getDownloadURL } from 'firebase/storage';
+import { doc, setDoc, onSnapshot, serverTimestamp, updateDoc, Timestamp, runTransaction, collection, addDoc, writeBatch, getDocs, query, where } from 'firebase/firestore';
+import { ref as storageRef, uploadString, getDownloadURL, deleteObject, listAll } from 'firebase/storage';
 import { db, storage } from '@/lib/firebase';
 import type { Game, GameStatus, PlayerKey, GeneratedImage } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
@@ -140,7 +141,7 @@ export function useGame() {
 
 
   const submitPlayerPrompt = useCallback(async (player: PlayerKey, playerPrompt: string, userId: string) => {
-    if (!userProfile && !userId) {
+    if (!userProfile && !userId.startsWith('session-')) {
       toast({ title: "Authentication Error", description: "You must be logged in to submit a prompt.", variant: "destructive" });
       throw new Error("User not authenticated");
     }
@@ -148,22 +149,13 @@ export function useGame() {
     const gameModel = game?.imageModel || 'gemini-2.0-flash-preview-image-generation';
     const cost = IMAGE_MODELS[gameModel as keyof typeof IMAGE_MODELS]?.cost || 1;
     
-    let effectiveUserId = userId;
-    let effectiveUserProfile = userProfile;
-
-    if (userId.startsWith('session-')) {
-        // This is a session-based user, find the admin's profile for credits
-        // Note: This assumes only one admin user. A more robust solution might store admin UIDs.
-        // For this app, let's assume the first user profile we find is the admin. This needs improvement in a real multi-admin scenario.
-        if(!currentUser || !userProfile) {
-             toast({ title: "Error", description: "Admin must be logged in to fund session players.", variant: "destructive" });
-             throw new Error("Admin not logged in for session player");
-        }
-        effectiveUserId = currentUser.uid;
-        effectiveUserProfile = userProfile;
+    // For credit deduction, we always need the admin/host user, even for session players.
+    if (!currentUser || !userProfile) {
+      toast({ title: "Host Error", description: "The game host must be logged in to fund image generation.", variant: "destructive" });
+      throw new Error("Game host not authenticated for credit deduction");
     }
     
-    if (effectiveUserProfile && effectiveUserProfile.credits < cost) {
+    if (userProfile.credits < cost) {
       toast({ title: "Insufficient Credits", description: "The host does not have enough credits to generate an image.", variant: "destructive" });
       throw new Error("Insufficient credits");
     }
@@ -190,17 +182,18 @@ export function useGame() {
       }
       
       const imageFileName = `${player}-${Date.now()}.png`;
-      const imagePath = `user-images/${effectiveUserId}/default-game/${imageFileName}`;
+      // We associate the image with the HOST's UID for storage and ownership purposes.
+      const imagePath = `user-images/${currentUser.uid}/default-game/${imageFileName}`;
       const sRef = storageRef(storage, imagePath);
       
       const uploadResult = await uploadString(sRef, imageDataUri, 'data_url');
       const downloadURL = await getDownloadURL(uploadResult.ref);
 
-      const userDocRef = doc(db, 'users', effectiveUserId);
+      const userDocRef = doc(db, 'users', currentUser.uid);
       await runTransaction(db, async (transaction) => {
         const userDocSnap = await transaction.get(userDocRef);
         if (!userDocSnap.exists()) {
-          throw "User document does not exist!";
+          throw "Host user document does not exist!";
         }
         const currentCredits = userDocSnap.data().credits;
         if (currentCredits < cost) {
@@ -211,7 +204,7 @@ export function useGame() {
       });
 
       const generatedImageData: GeneratedImage = {
-          userId: effectiveUserId,
+          userId: currentUser.uid, // The image belongs to the host user
           imageUrl: downloadURL,
           prompt: playerPrompt,
           playerKey: player,
@@ -283,6 +276,33 @@ export function useGame() {
 
   const resetGame = useCallback(async () => {
     const gameDocRef = doc(db, "games", GAME_ID);
+    
+    // Clear all generated images associated with the default game
+    try {
+        const imagesQuery = query(collection(db, 'generated_images'), where('userId', '!=', '')); // Query all for simplicity, can be refined
+        const imagesSnapshot = await getDocs(imagesQuery);
+        const batch = writeBatch(db);
+        
+        let hostUid: string | null = null;
+        if (!imagesSnapshot.empty) {
+            hostUid = imagesSnapshot.docs[0].data().userId;
+            imagesSnapshot.forEach(doc => {
+                batch.delete(doc.ref);
+            });
+            await batch.commit();
+        }
+
+        // Clear storage folder if host UID was found
+        if (hostUid) {
+            const gameStorageRef = storageRef(storage, `user-images/${hostUid}/default-game`);
+            const files = await listAll(gameStorageRef);
+            await Promise.all(files.items.map(fileRef => deleteObject(fileRef)));
+        }
+
+    } catch(e) {
+        console.error("Could not clear previous game images, proceeding with game reset.", e);
+    }
+
     try {
       const existingCreatedAt = game?.createdAt || serverTimestamp(); 
       const gameDataToSet = { ...defaultGameData, createdAt: existingCreatedAt, updatedAt: serverTimestamp()};
@@ -293,6 +313,7 @@ export function useGame() {
       toast({ title: "Error", description: "Failed to reset game.", variant: "destructive" });
     }
   }, [toast, game?.createdAt]);
+
 
   const generateNewSessionCodes = useCallback(async () => {
     const generateToken = () => Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
@@ -310,11 +331,16 @@ export function useGame() {
     return { playerOneToken, playerTwoToken };
   }, [updateGameData, toast]);
 
-  const connectPlayerWithToken = useCallback(async (playerKey: PlayerKey, sessionUserId: string) => {
+  const connectPlayerWithToken = useCallback(async (playerKey: PlayerKey) => {
     const gameDocRef = doc(db, "games", GAME_ID);
     const connectionField = playerKey === 'playerOne' ? 'playerOneConnected' : 'playerTwoConnected';
+    const lastSeenField = playerKey === 'playerOne' ? 'playerOneLastSeen' : 'playerTwoLastSeen';
     try {
-        await updateDoc(gameDocRef, { [connectionField]: true, updatedAt: serverTimestamp() });
+        await updateDoc(gameDocRef, { 
+            [connectionField]: true,
+            [lastSeenField]: serverTimestamp(),
+            updatedAt: serverTimestamp() 
+        });
         return true;
     } catch (e) {
         console.error("Failed to connect player:", e);

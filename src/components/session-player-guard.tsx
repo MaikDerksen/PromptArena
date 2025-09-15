@@ -7,7 +7,7 @@ import { useGame } from '@/hooks/use-game';
 import type { PlayerKey } from '@/lib/types';
 import LoadingSpinner from './loading-spinner';
 import { Alert, AlertDescription, AlertTitle } from './ui/alert';
-import { AlertCircle, WifiOff } from 'lucide-react';
+import { AlertCircle } from 'lucide-react';
 import { useAuth } from '@/contexts/auth-context';
 
 interface SessionPlayerGuardProps {
@@ -43,18 +43,21 @@ export default function SessionPlayerGuard({ playerKey, children }: SessionPlaye
       const isConnected = playerKey === 'playerOne' ? game.playerOneConnected : game.playerTwoConnected;
 
       if (token === expectedToken) {
-        if (!isConnected) {
+        // Only attempt to connect if the slot is explicitly NOT connected.
+        // This prevents re-renders during the connection process from causing a false "slot taken" error.
+        if (isConnected === false) {
           const newSessionId = `session-${playerKey}-${Date.now()}`;
           setSessionUserId(newSessionId);
-          connectPlayerWithToken(playerKey, newSessionId).then((success) => {
+          connectPlayerWithToken(playerKey).then((success) => {
             if (success) {
               setIsValidated(true);
             } else {
-              setAccessError('Failed to connect to the game session.');
+              setAccessError('Failed to connect to the game session. The slot may now be taken.');
               setIsValidated(true);
             }
           });
         } else {
+          // This will now only trigger if another player genuinely connects first.
           setAccessError('This player slot is already taken. Please ask the admin for a new link.');
           setIsValidated(true);
         }
@@ -64,6 +67,7 @@ export default function SessionPlayerGuard({ playerKey, children }: SessionPlaye
       }
     }
   }, [token, game, playerKey, connectPlayerWithToken, currentUser, gameLoading]);
+
 
   useEffect(() => {
     // This effect handles cleanup when the component unmounts (e.g., user closes the tab)

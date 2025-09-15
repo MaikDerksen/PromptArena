@@ -27,55 +27,50 @@ export default function SessionPlayerGuard({ playerKey, children }: SessionPlaye
   const [isConnecting, setIsConnecting] = useState(false);
 
   useEffect(() => {
-    // If a regular user is logged in, they have access. No token needed.
     if (currentUser) {
       setIsValidated(true);
       return;
     }
 
-    // If there's no token and no logged-in user, let AuthGuard handle redirect.
     if (!token) {
-      setIsValidated(true); 
+      setIsValidated(true);
       return;
     }
-    
-    // If we are already in the process of connecting, or game data is loading, do nothing and wait.
-    if (isConnecting || gameLoading || !game) {
+
+    if (gameLoading || !game || isConnecting) {
       return;
     }
 
     const expectedToken = playerKey === 'playerOne' ? game.playerOneAccessToken : game.playerTwoAccessToken;
     const isConnected = playerKey === 'playerOne' ? game.playerOneConnected : game.playerTwoConnected;
-
+    
     if (token === expectedToken) {
-      if (isConnected === false) {
+      if (isConnected) {
+        setAccessError('This player slot is already taken. Please ask the admin for a new link.');
+        setIsValidated(true);
+      } else {
         setIsConnecting(true);
         const newSessionId = `session-${playerKey}-${Date.now()}`;
         
         connectPlayerWithToken(playerKey).then((success) => {
           if (success) {
             setSessionUserId(newSessionId);
+            setIsValidated(true);
+            setIsConnecting(false);
           } else {
-            setAccessError('Failed to connect to the game session. The slot may now be taken.');
+            setAccessError('Failed to connect to the game session.');
+            setIsValidated(true);
+            setIsConnecting(false);
           }
-          setIsValidated(true);
-          setIsConnecting(false); 
         });
-      } else {
-        setAccessError('This player slot is already taken. Please ask the admin for a new link.');
-        setIsValidated(true);
       }
     } else {
       setAccessError('Invalid or expired access token. Please get a new QR code from the admin.');
       setIsValidated(true);
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [token, game, playerKey, currentUser, gameLoading]);
-
+  }, [token, game, playerKey, currentUser, gameLoading, connectPlayerWithToken, isConnecting]);
 
   useEffect(() => {
-    // This cleanup logic should only be active IF a session user is successfully connected.
-    // We return early if there's no sessionUserId, preventing the cleanup from running during initial connection renders.
     if (!sessionUserId) {
       return;
     }
@@ -86,7 +81,6 @@ export default function SessionPlayerGuard({ playerKey, children }: SessionPlaye
 
     window.addEventListener('beforeunload', handleBeforeUnload);
 
-    // This is the cleanup function that runs when the component unmounts.
     return () => {
       window.removeEventListener('beforeunload', handleBeforeUnload);
       disconnectPlayer(playerKey);
@@ -94,7 +88,7 @@ export default function SessionPlayerGuard({ playerKey, children }: SessionPlaye
   }, [sessionUserId, playerKey, disconnectPlayer]);
 
 
-  if (gameLoading || !isValidated) {
+  if (gameLoading || (!isValidated && !accessError)) {
     return (
       <div className="flex flex-col justify-center items-center min-h-[60vh]">
         <LoadingSpinner className="w-12 h-12" />

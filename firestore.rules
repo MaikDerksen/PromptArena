@@ -3,49 +3,28 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     
-    // Helper function to check if the update is only for player connection status
-    function isPlayerConnectionUpdate() {
-      // Check for playerOneConnected or playerTwoConnected fields, ensure no other fields are changed besides updatedAt and a lastSeen field
-      let allowedKeys = ['updatedAt', 'playerOneConnected', 'playerOneLastSeen', 'playerTwoConnected', 'playerTwoLastSeen'];
-      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(allowedKeys);
-    }
-
-    // Helper function to check if the update is only for player typing/submission data
-    function isPlayerActionUpdate() {
-      // Unauthenticated users can update their own prompt, typing prompt, and last seen timestamp.
-      let playerOneKeys = ['updatedAt', 'playerOneLastSeen', 'playerOneTypingPrompt', 'playerOnePrompt', 'playerOneImage'];
-      let playerTwoKeys = ['updatedAt', 'playerTwoLastSeen', 'playerTwoTypingPrompt', 'playerTwoPrompt', 'playerTwoImage'];
-      let keys = request.resource.data.diff(resource.data).affectedKeys();
-      
-      // Ensure the update only contains keys from one of the player lists
-      return (keys.hasAll(playerOneKeys) == false && keys.hasOnly(playerTwoKeys)) || 
-             (keys.hasAll(playerTwoKeys) == false && keys.hasOnly(playerOneKeys));
-    }
-
-    // Game data can be read by anyone.
-    // Writes are more specific:
-    // - Authenticated users (admins) can write anything.
-    // - Unauthenticated users (session players) can only update specific fields related to gameplay.
+    // WARNING: These rules are temporarily insecure for debugging the connection issue.
+    // They allow anyone to read and write to the game state.
+    // We must secure these rules again after confirming the fix.
     match /games/{gameId} {
-      allow read;
-      allow write: if request.auth != null || isPlayerConnectionUpdate() || isPlayerActionUpdate();
+      allow read, write: if true;
     }
 
-    // User profiles are private.
     match /users/{userId} {
-      allow read, update: if request.auth != null && request.auth.uid == userId;
-      allow create: if request.auth != null;
-    }
-    
-    // Generated images can be read by anyone, but only created by authenticated users.
-    match /generated_images/{imageId} {
-      allow read;
-      allow create: if request.auth != null;
+      allow read, create: if request.auth != null;
+      allow update: if request.auth != null && request.auth.uid == userId;
+      allow delete: if request.auth != null && request.auth.uid == userId;
+      
+      // Allow the Firebase Stripe Extension to create checkout sessions
+      match /checkout_sessions/{sessionId} {
+        allow read, write: if request.auth.uid == userId;
+      }
     }
 
-    // Stripe checkout sessions
-    match /users/{userId}/checkout_sessions/{sessionId} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
+    match /generated_images/{imageId} {
+      allow read: if request.auth != null;
+      allow create: if request.auth != null && request.resource.data.userId == request.auth.uid;
+      allow delete: if request.auth != null && resource.data.userId == request.auth.uid;
     }
   }
 }

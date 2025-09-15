@@ -45,25 +45,29 @@ export default function PlayerPromptForm({ playerKey, playerName, sessionUserId 
   }, [playerKey, updatePlayerLastSeen, effectiveUserId]);
   
   useEffect(() => {
+    // When a new round starts (final prompt is cleared), clear the local input
     if (!finalSubmittedPrompt) {
       setPromptInput('');
     }
   }, [finalSubmittedPrompt]);
 
+  // Using useCallback to memoize the debounced function
   const debouncedUpdateTypingPrompt = useCallback(
-    debounce((player: PlayerKey, pInput: string) => {
-      if (effectiveUserId && game?.status === 'active' && !hasSubmitted) { 
-        updatePlayerTypingPrompt(player, pInput, effectiveUserId);
+    debounce((player: PlayerKey, pInput: string, userId: string) => {
+      // Check game status inside the debounced function at the time of execution
+      if (game?.status === 'active' && !hasSubmitted) { 
+        updatePlayerTypingPrompt(player, pInput, userId);
       }
-    }, 500), 
-    [updatePlayerTypingPrompt, game?.status, effectiveUserId, hasSubmitted] 
+    }, 300), 
+    [updatePlayerTypingPrompt, game?.status, hasSubmitted] // Dependencies for useCallback
   );
 
   const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const newPrompt = e.target.value;
     setPromptInput(newPrompt);
+    // Only call the debounced function if we have a user and the round is active
     if (effectiveUserId && game?.status === 'active') {
-      debouncedUpdateTypingPrompt(playerKey, newPrompt);
+      debouncedUpdateTypingPrompt(playerKey, newPrompt, effectiveUserId);
     }
   };
 

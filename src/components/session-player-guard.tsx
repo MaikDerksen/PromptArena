@@ -74,8 +74,7 @@ export default function SessionPlayerGuard({ playerKey, children }: SessionPlaye
 
 
   useEffect(() => {
-    // THIS IS THE CRITICAL FIX:
-    // The cleanup logic should only be active IF a session user is successfully connected.
+    // This cleanup logic should only be active IF a session user is successfully connected.
     // We return early if there's no sessionUserId, preventing the cleanup from running during initial connection renders.
     if (!sessionUserId) {
       return;

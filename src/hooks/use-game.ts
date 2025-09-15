@@ -310,10 +310,16 @@ export function useGame() {
     return { playerOneToken, playerTwoToken };
   }, [updateGameData, toast]);
 
-  const connectPlayerWithToken = useCallback(async (playerKey: PlayerKey) => {
+  const connectPlayerWithToken = useCallback(async (playerKey: PlayerKey, sessionUserId: string) => {
     const gameDocRef = doc(db, "games", GAME_ID);
     const connectionField = playerKey === 'playerOne' ? 'playerOneConnected' : 'playerTwoConnected';
-    await updateDoc(gameDocRef, { [connectionField]: true, updatedAt: serverTimestamp() });
+    try {
+        await updateDoc(gameDocRef, { [connectionField]: true, updatedAt: serverTimestamp() });
+        return true;
+    } catch (e) {
+        console.error("Failed to connect player:", e);
+        return false;
+    }
   }, []);
 
   const disconnectPlayer = useCallback(async (playerKey: PlayerKey) => {

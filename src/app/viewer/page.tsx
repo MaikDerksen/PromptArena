@@ -12,6 +12,27 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import RoundTimer from '@/components/round-timer';
 import { QRCodeSVG } from 'qrcode.react';
 
+function QRCodeJoinCard({ playerName, joinUrl }: { playerName: string; joinUrl: string }) {
+  return (
+    <Card className="flex flex-col items-center justify-center p-6 text-center shadow-lg h-full">
+      <CardHeader>
+        <CardTitle className="font-headline text-2xl">{playerName}</CardTitle>
+        <CardDescription>Scan to join the game!</CardDescription>
+      </CardHeader>
+      <CardContent>
+        {joinUrl ? (
+          <div className="p-4 bg-white rounded-lg inline-block">
+            <QRCodeSVG value={joinUrl} size={160} />
+          </div>
+        ) : (
+          <p className="text-muted-foreground">Join code not available.</p>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+
 export default function ViewerPage() {
   const { game, loading, error } = useGame();
   const [baseUrl, setBaseUrl] = useState('');
@@ -38,7 +59,6 @@ export default function ViewerPage() {
 
   const playerOneJoinUrl = baseUrl && game.playerOneAccessToken ? `${baseUrl}/player-one?token=${game.playerOneAccessToken}` : '';
   const playerTwoJoinUrl = baseUrl && game.playerTwoAccessToken ? `${baseUrl}/player-two?token=${game.playerTwoAccessToken}` : '';
-  const noPlayersConnected = !game.playerOneConnected && !game.playerTwoConnected;
 
   return (
     <div className="space-y-8">
@@ -66,35 +86,8 @@ export default function ViewerPage() {
         </CardContent>
       </Card>
 
-      {noPlayersConnected && (playerOneJoinUrl || playerTwoJoinUrl) ? (
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center justify-center gap-2 text-2xl font-headline">
-              <QrCode className="text-primary"/> Join the Game!
-            </CardTitle>
-            <CardDescription className="text-center">Scan a QR code with your mobile device to join as a player.</CardDescription>
-          </CardHeader>
-          <CardContent className="grid grid-cols-1 sm:grid-cols-2 gap-6 pt-4">
-            <div className="text-center space-y-2 flex flex-col items-center">
-              <h3 className="font-semibold text-lg">Player One</h3>
-              {playerOneJoinUrl ? (
-                <div className="p-4 bg-white rounded-lg inline-block">
-                  <QRCodeSVG value={playerOneJoinUrl} size={160} />
-                </div>
-              ) : <p className="text-muted-foreground text-sm">Join code not available.</p>}
-            </div>
-            <div className="text-center space-y-2 flex flex-col items-center">
-              <h3 className="font-semibold text-lg">Player Two</h3>
-              {playerTwoJoinUrl ? (
-                <div className="p-4 bg-white rounded-lg inline-block">
-                  <QRCodeSVG value={playerTwoJoinUrl} size={160} />
-                </div>
-              ) : <p className="text-muted-foreground text-sm">Join code not available.</p>}
-            </div>
-          </CardContent>
-        </Card>
-      ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {game.playerOneConnected ? (
           <ImageCard
             playerName="Player One"
             finalPrompt={game.playerOnePrompt}
@@ -105,7 +98,11 @@ export default function ViewerPage() {
             isLiveTypingView={true}
             isGenerating={game.status === 'active' && !!game.playerOnePrompt && !game.playerOneImage}
           />
+        ) : (
+           <QRCodeJoinCard playerName="Player One" joinUrl={playerOneJoinUrl} />
+        )}
 
+        {game.playerTwoConnected ? (
           <ImageCard
             playerName="Player Two"
             finalPrompt={game.playerTwoPrompt}
@@ -116,8 +113,10 @@ export default function ViewerPage() {
             isLiveTypingView={true}
             isGenerating={game.status === 'active' && !!game.playerTwoPrompt && !game.playerTwoImage}
           />
-        </div>
-      )}
+        ) : (
+          <QRCodeJoinCard playerName="Player Two" joinUrl={playerTwoJoinUrl} />
+        )}
+      </div>
     </div>
   );
 }

@@ -38,7 +38,7 @@ export default function SessionPlayerGuard({ playerKey, children }: SessionPlaye
       return;
     }
 
-    if (game) {
+    if (game && !gameLoading) {
       const expectedToken = playerKey === 'playerOne' ? game.playerOneAccessToken : game.playerTwoAccessToken;
       const isConnected = playerKey === 'playerOne' ? game.playerOneConnected : game.playerTwoConnected;
 
@@ -46,8 +46,13 @@ export default function SessionPlayerGuard({ playerKey, children }: SessionPlaye
         if (!isConnected) {
           const newSessionId = `session-${playerKey}-${Date.now()}`;
           setSessionUserId(newSessionId);
-          connectPlayerWithToken(playerKey).then(() => {
-            setIsValidated(true);
+          connectPlayerWithToken(playerKey, newSessionId).then((success) => {
+            if (success) {
+              setIsValidated(true);
+            } else {
+              setAccessError('Failed to connect to the game session.');
+              setIsValidated(true);
+            }
           });
         } else {
           setAccessError('This player slot is already taken. Please ask the admin for a new link.');
@@ -58,7 +63,7 @@ export default function SessionPlayerGuard({ playerKey, children }: SessionPlaye
         setIsValidated(true);
       }
     }
-  }, [token, game, playerKey, connectPlayerWithToken, currentUser]);
+  }, [token, game, playerKey, connectPlayerWithToken, currentUser, gameLoading]);
 
   useEffect(() => {
     // This effect handles cleanup when the component unmounts (e.g., user closes the tab)

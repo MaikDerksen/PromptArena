@@ -24,6 +24,7 @@ export default function SessionPlayerGuard({ playerKey, children }: SessionPlaye
   const [isValidated, setIsValidated] = useState(false);
   const [accessError, setAccessError] = useState<string | null>(null);
   const [sessionUserId, setSessionUserId] = useState<string | null>(null);
+  const [isConnecting, setIsConnecting] = useState(false); // New state to manage connection process
 
   useEffect(() => {
     // If a regular user is logged in, they have access. No token needed.
@@ -32,41 +33,46 @@ export default function SessionPlayerGuard({ playerKey, children }: SessionPlaye
       return;
     }
 
-    // If there's no token and no logged-in user, validation fails.
+    // If there's no token and no logged-in user, let AuthGuard handle redirect.
     if (!token) {
-      setIsValidated(true); // Let AuthGuard handle redirect
+      setIsValidated(true); 
+      return;
+    }
+    
+    // If we are already in the process of connecting, do nothing and wait.
+    if (isConnecting || gameLoading || !game) {
       return;
     }
 
-    if (game && !gameLoading) {
-      const expectedToken = playerKey === 'playerOne' ? game.playerOneAccessToken : game.playerTwoAccessToken;
-      const isConnected = playerKey === 'playerOne' ? game.playerOneConnected : game.playerTwoConnected;
+    const expectedToken = playerKey === 'playerOne' ? game.playerOneAccessToken : game.playerTwoAccessToken;
+    const isConnected = playerKey === 'playerOne' ? game.playerOneConnected : game.playerTwoConnected;
 
-      if (token === expectedToken) {
-        // Only attempt to connect if the slot is explicitly NOT connected.
-        // This prevents re-renders during the connection process from causing a false "slot taken" error.
-        if (isConnected === false) {
-          const newSessionId = `session-${playerKey}-${Date.now()}`;
-          setSessionUserId(newSessionId);
-          connectPlayerWithToken(playerKey).then((success) => {
-            if (success) {
-              setIsValidated(true);
-            } else {
-              setAccessError('Failed to connect to the game session. The slot may now be taken.');
-              setIsValidated(true);
-            }
-          });
-        } else {
-          // This will now only trigger if another player genuinely connects first.
-          setAccessError('This player slot is already taken. Please ask the admin for a new link.');
-          setIsValidated(true);
-        }
+    if (token === expectedToken) {
+      if (isConnected === false) {
+        setIsConnecting(true); // Start the connection process
+        const newSessionId = `session-${playerKey}-${Date.now()}`;
+        
+        connectPlayerWithToken(playerKey).then((success) => {
+          if (success) {
+            setSessionUserId(newSessionId);
+            setIsValidated(true);
+          } else {
+            setAccessError('Failed to connect to the game session. The slot may now be taken.');
+            setIsValidated(true);
+          }
+          setIsConnecting(false); // End the connection process
+        });
       } else {
-        setAccessError('Invalid or expired access token. Please get a new QR code from the admin.');
+        // This slot is genuinely taken by someone else.
+        setAccessError('This player slot is already taken. Please ask the admin for a new link.');
         setIsValidated(true);
       }
+    } else {
+      setAccessError('Invalid or expired access token. Please get a new QR code from the admin.');
+      setIsValidated(true);
     }
-  }, [token, game, playerKey, connectPlayerWithToken, currentUser, gameLoading]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [token, game, playerKey, currentUser, gameLoading]);
 
 
   useEffect(() => {

@@ -3,37 +3,49 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     
-    // Game document: Allow anyone to read, but restrict writes.
-    match /games/{gameId} {
-      allow read: if true;
-      
-      // Allow writes only if a user is authenticated (is an admin/player)
-      // OR if the write is only to update connection status or last seen,
-      // which is what our session-based QR code users need to do.
-      allow write: if request.auth != null || 
-                      (request.resource.data.diff(resource.data).affectedKeys()
-                        .hasOnly(['playerOneConnected', 'playerTwoConnected', 'playerOneLastSeen', 'playerTwoLastSeen', 'playerOneTypingPrompt', 'playerTwoTypingPrompt', 'updatedAt']));
+    // Helper function to check if the update is only for player connection status
+    function isPlayerConnectionUpdate() {
+      // Check for playerOneConnected or playerTwoConnected fields, ensure no other fields are changed besides updatedAt and a lastSeen field
+      let allowedKeys = ['updatedAt', 'playerOneConnected', 'playerOneLastSeen', 'playerTwoConnected', 'playerTwoLastSeen'];
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(allowedKeys);
     }
 
-    // User profiles: Only the authenticated user can read/write their own profile.
+    // Helper function to check if the update is only for player typing/submission data
+    function isPlayerActionUpdate() {
+      // Unauthenticated users can update their own prompt, typing prompt, and last seen timestamp.
+      let playerOneKeys = ['updatedAt', 'playerOneLastSeen', 'playerOneTypingPrompt', 'playerOnePrompt', 'playerOneImage'];
+      let playerTwoKeys = ['updatedAt', 'playerTwoLastSeen', 'playerTwoTypingPrompt', 'playerTwoPrompt', 'playerTwoImage'];
+      let keys = request.resource.data.diff(resource.data).affectedKeys();
+      
+      // Ensure the update only contains keys from one of the player lists
+      return (keys.hasAll(playerOneKeys) == false && keys.hasOnly(playerTwoKeys)) || 
+             (keys.hasAll(playerTwoKeys) == false && keys.hasOnly(playerOneKeys));
+    }
+
+    // Game data can be read by anyone.
+    // Writes are more specific:
+    // - Authenticated users (admins) can write anything.
+    // - Unauthenticated users (session players) can only update specific fields related to gameplay.
+    match /games/{gameId} {
+      allow read;
+      allow write: if request.auth != null || isPlayerConnectionUpdate() || isPlayerActionUpdate();
+    }
+
+    // User profiles are private.
     match /users/{userId} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
-    }
-    
-    // Checkout sessions: Only the authenticated user can create checkout sessions for themselves.
-    match /users/{userId}/checkout_sessions/{sessionId} {
-      allow create: if request.auth != null && request.auth.uid == userId;
-      // Stripe extension needs to update this document
-      allow read, write: if request.auth != null && request.auth.uid == userId; 
-    }
-    
-    // Generated Images: Any authenticated user can create an image record.
-    // Only the user who created it can read it.
-    match /generated_images/{imageId} {
+      allow read, update: if request.auth != null && request.auth.uid == userId;
       allow create: if request.auth != null;
-      allow read: if request.auth != null && resource.data.userId == request.auth.uid;
-      // No updates or deletes from the client side.
-      allow update, delete: if false;
+    }
+    
+    // Generated images can be read by anyone, but only created by authenticated users.
+    match /generated_images/{imageId} {
+      allow read;
+      allow create: if request.auth != null;
+    }
+
+    // Stripe checkout sessions
+    match /users/{userId}/checkout_sessions/{sessionId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
     }
   }
 }

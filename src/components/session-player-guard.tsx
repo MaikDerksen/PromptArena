@@ -42,28 +42,22 @@ export default function SessionPlayerGuard({ playerKey, children }: SessionPlaye
     }
 
     const expectedToken = playerKey === 'playerOne' ? game.playerOneAccessToken : game.playerTwoAccessToken;
-    const isConnected = playerKey === 'playerOne' ? game.playerOneConnected : game.playerTwoConnected;
     
     if (token === expectedToken) {
-      if (isConnected) {
-        setAccessError('This player slot is already taken. Please ask the admin for a new link.');
-        setIsValidated(true);
-      } else {
-        setIsConnecting(true);
-        const newSessionId = `session-${playerKey}-${Date.now()}`;
-        
-        connectPlayerWithToken(playerKey).then((success) => {
-          if (success) {
-            setSessionUserId(newSessionId);
-            setIsValidated(true);
-            setIsConnecting(false);
-          } else {
-            setAccessError('Failed to connect to the game session.');
-            setIsValidated(true);
-            setIsConnecting(false);
-          }
-        });
-      }
+      setIsConnecting(true);
+      const newSessionId = `session-${playerKey}-${Date.now()}`;
+      
+      connectPlayerWithToken(playerKey).then((success) => {
+        if (success) {
+          setSessionUserId(newSessionId);
+          setIsValidated(true);
+          setIsConnecting(false);
+        } else {
+          setAccessError('Failed to connect to the game session.');
+          setIsValidated(true);
+          setIsConnecting(false);
+        }
+      });
     } else {
       setAccessError('Invalid or expired access token. Please get a new QR code from the admin.');
       setIsValidated(true);

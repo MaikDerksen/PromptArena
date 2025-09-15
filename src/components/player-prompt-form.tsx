@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
@@ -154,7 +153,7 @@ export default function PlayerPromptForm({ playerKey, playerName, sessionUserId 
               <AlertTitle>Time's Up!</AlertTitle>
               <AlertDescription>
                 The time for this round has ended. You can no longer submit a prompt.
-              </Description>
+              </AlertDescription>
             </Alert>
            )}
         </CardHeader>

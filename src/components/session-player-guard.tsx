@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useEffect, useState, type ReactNode } from 'react';
@@ -23,7 +24,7 @@ export default function SessionPlayerGuard({ playerKey, children }: SessionPlaye
   const [isValidated, setIsValidated] = useState(false);
   const [accessError, setAccessError] = useState<string | null>(null);
   const [sessionUserId, setSessionUserId] = useState<string | null>(null);
-  const [isConnecting, setIsConnecting] = useState(false); // New state to manage connection process
+  const [isConnecting, setIsConnecting] = useState(false);
 
   useEffect(() => {
     // If a regular user is logged in, they have access. No token needed.
@@ -48,21 +49,19 @@ export default function SessionPlayerGuard({ playerKey, children }: SessionPlaye
 
     if (token === expectedToken) {
       if (isConnected === false) {
-        setIsConnecting(true); // Start the connection process
+        setIsConnecting(true);
         const newSessionId = `session-${playerKey}-${Date.now()}`;
         
         connectPlayerWithToken(playerKey).then((success) => {
           if (success) {
             setSessionUserId(newSessionId);
-            setIsValidated(true);
           } else {
             setAccessError('Failed to connect to the game session. The slot may now be taken.');
-            setIsValidated(true);
           }
-          setIsConnecting(false); // End the connection process
+          setIsValidated(true);
+          setIsConnecting(false); 
         });
       } else {
-        // This slot is genuinely taken by someone else.
         setAccessError('This player slot is already taken. Please ask the admin for a new link.');
         setIsValidated(true);
       }
@@ -75,22 +74,23 @@ export default function SessionPlayerGuard({ playerKey, children }: SessionPlaye
 
 
   useEffect(() => {
-    // This effect handles cleanup when the component unmounts (e.g., user closes the tab)
-    const handleBeforeUnload = () => {
-      if (sessionUserId) {
-        disconnectPlayer(playerKey);
-      }
-    };
-    
-    if (sessionUserId) {
-      window.addEventListener('beforeunload', handleBeforeUnload);
+    // THIS IS THE CRITICAL FIX:
+    // The cleanup logic should only be active IF a session user is successfully connected.
+    // We return early if there's no sessionUserId, preventing the cleanup from running during initial connection renders.
+    if (!sessionUserId) {
+      return;
     }
 
+    const handleBeforeUnload = () => {
+      disconnectPlayer(playerKey);
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+
+    // This is the cleanup function that runs when the component unmounts.
     return () => {
-      if (sessionUserId) {
-        window.removeEventListener('beforeunload', handleBeforeUnload);
-        disconnectPlayer(playerKey);
-      }
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+      disconnectPlayer(playerKey);
     };
   }, [sessionUserId, playerKey, disconnectPlayer]);
 

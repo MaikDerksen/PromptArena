@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useEffect, useState, type ReactNode } from 'react';
@@ -39,7 +38,7 @@ export default function SessionPlayerGuard({ playerKey, children }: SessionPlaye
       return;
     }
     
-    // If we are already in the process of connecting, do nothing and wait.
+    // If we are already in the process of connecting, or game data is loading, do nothing and wait.
     if (isConnecting || gameLoading || !game) {
       return;
     }

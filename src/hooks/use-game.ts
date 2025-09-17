@@ -2,7 +2,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { doc, setDoc, onSnapshot, serverTimestamp, updateDoc, Timestamp, runTransaction, collection, addDoc, writeBatch, getDocs, query, where, getDoc } from 'firebase/firestore';
+import { doc, setDoc, onSnapshot, serverTimestamp, updateDoc, Timestamp, runTransaction, collection, addDoc, writeBatch, getDocs, query, where, getDoc, FieldValue } from 'firebase/firestore';
 import { ref as storageRef, uploadString, getDownloadURL, deleteObject, listAll } from 'firebase/storage';
 import { db, storage } from '@/lib/firebase';
 import type { Game, GameStatus, PlayerKey, GeneratedImage } from '@/lib/types';
@@ -94,7 +94,7 @@ export function useGame() {
   const updateGameData = useCallback(async (data: Partial<Game>) => {
     const gameDocRef = doc(db, "games", GAME_ID);
     try {
-      await updateDoc(gameDocRef, { ...data, updatedAt: serverTimestamp() });
+      await updateDoc(gameDocRef, { ...data, updatedAt: serverTimestamp() as Timestamp });
     } catch (e: any) {
       console.error("Error updating game data:", e);
       toast({ title: "Error", description: "Failed to update game.", variant: "destructive" });
@@ -116,7 +116,7 @@ export function useGame() {
     const lastSeenField = player === "playerOne" ? "playerOneLastSeen" : "playerTwoLastSeen";
     try {
       const gameDocRef = doc(db, "games", GAME_ID);
-      await updateDoc(gameDocRef, { [lastSeenField]: serverTimestamp(), updatedAt: serverTimestamp() });
+      await updateDoc(gameDocRef, { [lastSeenField]: serverTimestamp() as Timestamp, updatedAt: serverTimestamp() as Timestamp });
     } catch (e) {
       console.error("Error updating last seen:", e);
        toast({ title: "Error", description: "Failed to update player activity.", variant: "destructive" });
@@ -130,12 +130,12 @@ export function useGame() {
     
     const updates: Partial<Game> = {
       [typingField]: typingPrompt,
-      [lastSeenField]: serverTimestamp(),
+      [lastSeenField]: serverTimestamp() as Timestamp,
     };
     
     const gameDocRef = doc(db, "games", GAME_ID);
     try {
-        await updateDoc(gameDocRef, { ...updates, updatedAt: serverTimestamp() });
+        await updateDoc(gameDocRef, { ...updates, updatedAt: serverTimestamp() as Timestamp });
     } catch (e) {
         console.error("Error updating typing prompt:", e);
         toast({ title: "Error", description: "Failed to update typing progress.", variant: "destructive" });
@@ -151,7 +151,7 @@ export function useGame() {
         await updateGameData({ 
             [promptField]: playerPrompt,
             [typingField]: "",
-            [lastSeenField]: serverTimestamp(),
+            [lastSeenField]: serverTimestamp() as Timestamp,
         });
         toast({ title: "Prompt Submitted!", description: "Your prompt has been locked in. Waiting for admin to generate images." });
     } catch(e) {
@@ -172,12 +172,11 @@ export function useGame() {
       const currentGameData = gameSnap.data() as Game;
       const isTimeUp = currentGameData.roundEndsAt ? new Date() > (currentGameData.roundEndsAt as Timestamp).toDate() : false;
 
-      // Only proceed if the round is active and time is up.
       if (currentGameData.status !== 'active' || !isTimeUp) {
         return; 
       }
       
-      const updates: Partial<Game> = { status: 'completed', updatedAt: serverTimestamp() };
+      const updates: Partial<Game> = { status: 'completed', updatedAt: serverTimestamp() as Timestamp };
 
       if (!currentGameData.playerOnePrompt) {
         updates.playerOnePrompt = currentGameData.playerOneTypingPrompt || "No prompt submitted in time.";
@@ -188,7 +187,7 @@ export function useGame() {
         updates.playerTwoTypingPrompt = "";
       }
       
-      await updateDoc(gameDocRef, updates);
+      await updateDoc(gameDocRef, updates as { [x: string]: any; });
       toast({ title: "Round Over!", description: "Prompts have been finalized automatically." });
     } catch (e: any) {
       console.error("Error finalizing round:", e);
@@ -359,8 +358,8 @@ export function useGame() {
 
     try {
       const existingCreatedAt = game?.createdAt || serverTimestamp(); 
-      const gameDataToSet = { ...defaultGameData, createdAt: existingCreatedAt, updatedAt: serverTimestamp()};
-      await setDoc(gameDocRef, gameDataToSet); 
+      const gameDataToSet = { ...defaultGameData, createdAt: existingCreatedAt, updatedAt: serverTimestamp() as Timestamp };
+      await setDoc(gameDocRef, gameDataToSet as { [x: string]: any; }); 
       toast({ title: "Game Reset", description: "The entire game has been reset to defaults." });
     } catch (e:any) {
       console.error("Error resetting game:", e);
@@ -392,8 +391,8 @@ export function useGame() {
     try {
         await updateDoc(gameDocRef, { 
             [connectionField]: true,
-            [lastSeenField]: serverTimestamp(),
-            updatedAt: serverTimestamp() 
+            [lastSeenField]: serverTimestamp() as Timestamp,
+            updatedAt: serverTimestamp() as Timestamp
         });
         return true;
     } catch (e) {
@@ -408,7 +407,7 @@ export function useGame() {
     try {
       await updateDoc(gameDocRef, { 
         [connectionField]: false,
-        updatedAt: serverTimestamp() 
+        updatedAt: serverTimestamp() as Timestamp
       });
     } catch (e) {
       console.error("Failed to disconnect player:", e);

@@ -164,30 +164,36 @@ export function useGame() {
    const endRoundAndFinalizePrompts = useCallback(async () => {
     const gameDocRef = doc(db, "games", GAME_ID);
     try {
-        await runTransaction(db, async (transaction) => {
-            const gameSnap = await transaction.get(gameDocRef);
-            if (!gameSnap.exists()) {
-                throw new Error("Game document does not exist!");
-            }
-            const currentGameData = gameSnap.data() as Game;
-            const updates: Partial<Game> = { status: 'completed' };
+      const gameSnap = await getDoc(gameDocRef);
+      if (!gameSnap.exists()) {
+        throw new Error("Game document does not exist!");
+      }
+      
+      const currentGameData = gameSnap.data() as Game;
+      const isTimeUp = currentGameData.roundEndsAt ? new Date() > (currentGameData.roundEndsAt as Timestamp).toDate() : false;
 
-            if (!currentGameData.playerOnePrompt) {
-                updates.playerOnePrompt = currentGameData.playerOneTypingPrompt || "No prompt submitted in time.";
-                updates.playerOneTypingPrompt = "";
-            }
-            if (!currentGameData.playerTwoPrompt) {
-                updates.playerTwoPrompt = currentGameData.playerTwoTypingPrompt || "No prompt submitted in time.";
-                updates.playerTwoTypingPrompt = "";
-            }
-            
-            transaction.update(gameDocRef, { ...updates, updatedAt: serverTimestamp() });
-        });
-        toast({ title: "Round Finalized", description: "Any unsubmitted prompts have been locked in from player's last input." });
+      // Only proceed if the round is active and time is up.
+      if (currentGameData.status !== 'active' || !isTimeUp) {
+        return; 
+      }
+      
+      const updates: Partial<Game> = { status: 'completed', updatedAt: serverTimestamp() };
+
+      if (!currentGameData.playerOnePrompt) {
+        updates.playerOnePrompt = currentGameData.playerOneTypingPrompt || "No prompt submitted in time.";
+        updates.playerOneTypingPrompt = "";
+      }
+      if (!currentGameData.playerTwoPrompt) {
+        updates.playerTwoPrompt = currentGameData.playerTwoTypingPrompt || "No prompt submitted in time.";
+        updates.playerTwoTypingPrompt = "";
+      }
+      
+      await updateDoc(gameDocRef, updates);
+      toast({ title: "Round Over!", description: "Prompts have been finalized automatically." });
     } catch (e: any) {
-        console.error("Error finalizing round:", e);
-        toast({ title: "Finalization Failed", description: e.message, variant: "destructive" });
-        throw e;
+      console.error("Error finalizing round:", e);
+      toast({ title: "Finalization Failed", description: e.message, variant: "destructive" });
+      throw e;
     }
   }, [toast]);
   

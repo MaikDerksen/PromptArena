@@ -60,7 +60,6 @@ function AdminPageContent() {
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
   const [isRevealingImages, setIsRevealingImages] = useState(false);
   const [isStartingRound, setIsStartingRound] = useState(false);
-  const [isFinalizing, setIsFinalizing] = useState(false);
   const [isGeneratingImages, setIsGeneratingImages] = useState(false);
   const [isDeletingAccount, setIsDeletingAccount] = useState(false);
   const [isGeneratingCodes, setIsGeneratingCodes] = useState(false);
@@ -82,8 +81,13 @@ function AdminPageContent() {
     if (game) {
       setNewPrompt(game.prompt);
       setRoundDuration(game.roundDuration?.toString() || '60');
+      
+      const isTimeUp = game.roundEndsAt ? new Date() > (game.roundEndsAt as Timestamp).toDate() : false;
+      if (game.status === 'active' && isTimeUp) {
+        endRoundAndFinalizePrompts();
+      }
     }
-  }, [game]);
+  }, [game, endRoundAndFinalizePrompts]);
 
   const handleSetPrompt = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -102,17 +106,6 @@ function AdminPageContent() {
       await startRound(parseInt(roundDuration, 10));
     } finally {
       setIsStartingRound(false);
-    }
-  };
-  
-  const handleFinalizeRound = async () => {
-    setIsFinalizing(true);
-    try {
-        await endRoundAndFinalizePrompts();
-    } catch (e) {
-        // Error toast is handled in the hook
-    } finally {
-        setIsFinalizing(false);
     }
   };
 
@@ -230,9 +223,6 @@ function AdminPageContent() {
   const playerTwoActivity = formatLastSeen(game.playerTwoLastSeen || null);
   const canRevealImages = (!!game.playerOneImage || !!game.playerTwoImage) && !game.imagesRevealed;
   const canGenerateImages = !!game.playerOnePrompt && !!game.playerTwoPrompt && !game.playerOneImage && !game.playerTwoImage && !game.isGenerating;
-  const isTimeUp = game.roundEndsAt ? new Date() > (game.roundEndsAt as Timestamp).toDate() : false;
-  const canFinalize = game.status === 'active' && isTimeUp && (!game.playerOnePrompt || !game.playerTwoPrompt);
-
 
   const playerOneJoinUrl = baseUrl && game.playerOneAccessToken ? `${baseUrl}/player-one?token=${game.playerOneAccessToken}` : '';
   const playerTwoJoinUrl = baseUrl && game.playerTwoAccessToken ? `${baseUrl}/player-two?token=${game.playerTwoAccessToken}` : '';
@@ -423,16 +413,10 @@ function AdminPageContent() {
           <CardDescription>Manage the game flow and player states.</CardDescription>
         </CardHeader>
         <CardContent className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {canFinalize ? (
-             <Button onClick={handleFinalizeRound} disabled={isFinalizing} className="w-full bg-orange-600 hover:bg-orange-700">
-                <CheckSquare className="mr-2 h-4 w-4"/> Finalize & Prepare Generation
-            </Button>
-          ) : (
-            <Button onClick={handleStartRound} disabled={isStartingRound || game.status === 'active'} className="w-full bg-green-600 hover:bg-green-700">
-              <Play className="mr-2 h-4 w-4"/> Start Round
-            </Button>
-          )}
-           <Button onClick={handleGenerateImages} disabled={!canGenerateImages} className="w-full bg-blue-600 hover:bg-blue-700">
+          <Button onClick={handleStartRound} disabled={isStartingRound || game.status === 'active'} className="w-full bg-green-600 hover:bg-green-700">
+            <Play className="mr-2 h-4 w-4"/> Start Round
+          </Button>
+          <Button onClick={handleGenerateImages} disabled={!canGenerateImages} className="w-full bg-blue-600 hover:bg-blue-700">
             {game.isGenerating ? <><LoadingSpinner className="mr-2"/>Generating...</> : <><Sparkles className="mr-2 h-4 w-4"/> Generate Images</>}
           </Button>
           <Button onClick={handleRevealImages} disabled={isRevealingImages || !canRevealImages} className="w-full">

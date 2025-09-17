@@ -25,7 +25,7 @@ interface PlayerPromptFormProps {
 }
 
 export default function PlayerPromptForm({ playerKey, playerName, sessionUserId }: PlayerPromptFormProps) {
-  const { game, submitPlayerPrompt, updatePlayerTypingPrompt, updatePlayerLastSeen, loading: gameLoading } = useGame();
+  const { game, submitPlayerPrompt, updatePlayerTypingPrompt, updatePlayerLastSeen, endRoundAndFinalizePrompts, loading: gameLoading } = useGame();
   const { currentUser, userProfile, loading: authLoading } = useAuth();
   const { toast } = useToast();
   
@@ -46,27 +46,30 @@ export default function PlayerPromptForm({ playerKey, playerName, sessionUserId 
   }, [playerKey, updatePlayerLastSeen, effectiveUserId]);
   
   useEffect(() => {
-    // When a new round starts (final prompt is cleared), clear the local input
     if (!finalSubmittedPrompt) {
       setPromptInput('');
     }
   }, [finalSubmittedPrompt]);
 
-  // Using useCallback to memoize the debounced function
+  useEffect(() => {
+    const isTimeUp = game?.roundEndsAt ? new Date() > (game.roundEndsAt as Timestamp).toDate() : false;
+    if (game?.status === 'active' && isTimeUp) {
+      endRoundAndFinalizePrompts();
+    }
+  }, [game?.status, game?.roundEndsAt, endRoundAndFinalizePrompts]);
+
   const debouncedUpdateTypingPrompt = useCallback(
     debounce((player: PlayerKey, pInput: string, userId: string) => {
-      // Check game status inside the debounced function at the time of execution
       if (game?.status === 'active' && !hasSubmitted) { 
         updatePlayerTypingPrompt(player, pInput, userId);
       }
     }, 300), 
-    [updatePlayerTypingPrompt, game?.status, hasSubmitted] // Dependencies for useCallback
+    [updatePlayerTypingPrompt, game?.status, hasSubmitted]
   );
 
   const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const newPrompt = e.target.value;
     setPromptInput(newPrompt);
-    // Only call the debounced function if we have a user and the round is active
     if (effectiveUserId && game?.status === 'active') {
       debouncedUpdateTypingPrompt(playerKey, newPrompt, effectiveUserId);
     }
@@ -157,7 +160,7 @@ export default function PlayerPromptForm({ playerKey, playerName, sessionUserId 
               <Clock className="h-4 w-4"/>
               <AlertTitle>Time's Up!</AlertTitle>
               <AlertDescription>
-                The time for this round has ended. You can no longer submit a prompt.
+                Your last typed text has been automatically submitted.
               </AlertDescription>
             </Alert>
            )}

@@ -23,7 +23,7 @@ import { useGame, IMAGE_MODELS } from '@/hooks/use-game';
 import LoadingSpinner from '@/components/loading-spinner';
 import ImageCard from '@/components/image-card';
 import GameStatusBadge from '@/components/game-status-badge';
-import { AlertCircle, Edit3, Play, RotateCcw, SkipForward, Eye, UserCheck, UserX, Image as ImageIcon, CheckCircle, Wifi, HelpCircle, CreditCard, Settings, Timer, Trash2, GalleryThumbnails, QrCode, Sparkles } from 'lucide-react';
+import { AlertCircle, Edit3, Play, RotateCcw, SkipForward, Eye, UserCheck, UserX, Image as ImageIcon, CheckCircle, Wifi, HelpCircle, CreditCard, Settings, Timer, Trash2, GalleryThumbnails, QrCode, Sparkles, CheckSquare } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Timestamp } from 'firebase/firestore';
 import { generateImage } from '@/ai/flows/generate-image'; 
@@ -51,7 +51,7 @@ const formatLastSeen = (lastSeen: Timestamp | Date | null): {text: string, icon:
 
 
 function AdminPageContent() {
-  const { game, loading: gameLoading, error: gameError, setCentralPrompt, startRound, updateGameStatus, revealImages, resetRound, resetGame, setImageModel, generateNewSessionCodes, generateImagesForPlayers } = useGame();
+  const { game, loading: gameLoading, error: gameError, setCentralPrompt, startRound, updateGameStatus, revealImages, resetRound, resetGame, setImageModel, generateNewSessionCodes, generateImagesForPlayers, endRoundAndFinalizePrompts } = useGame();
   const { userProfile, loading: authLoading, deleteCurrentUserAccount } = useAuth();
   const { toast } = useToast();
   
@@ -60,6 +60,7 @@ function AdminPageContent() {
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
   const [isRevealingImages, setIsRevealingImages] = useState(false);
   const [isStartingRound, setIsStartingRound] = useState(false);
+  const [isFinalizing, setIsFinalizing] = useState(false);
   const [isGeneratingImages, setIsGeneratingImages] = useState(false);
   const [isDeletingAccount, setIsDeletingAccount] = useState(false);
   const [isGeneratingCodes, setIsGeneratingCodes] = useState(false);
@@ -101,6 +102,17 @@ function AdminPageContent() {
       await startRound(parseInt(roundDuration, 10));
     } finally {
       setIsStartingRound(false);
+    }
+  };
+  
+  const handleFinalizeRound = async () => {
+    setIsFinalizing(true);
+    try {
+        await endRoundAndFinalizePrompts();
+    } catch (e) {
+        // Error toast is handled in the hook
+    } finally {
+        setIsFinalizing(false);
     }
   };
 
@@ -218,6 +230,9 @@ function AdminPageContent() {
   const playerTwoActivity = formatLastSeen(game.playerTwoLastSeen || null);
   const canRevealImages = (!!game.playerOneImage || !!game.playerTwoImage) && !game.imagesRevealed;
   const canGenerateImages = !!game.playerOnePrompt && !!game.playerTwoPrompt && !game.playerOneImage && !game.playerTwoImage && !game.isGenerating;
+  const isTimeUp = game.roundEndsAt ? new Date() > (game.roundEndsAt as Timestamp).toDate() : false;
+  const canFinalize = game.status === 'active' && isTimeUp && (!game.playerOnePrompt || !game.playerTwoPrompt);
+
 
   const playerOneJoinUrl = baseUrl && game.playerOneAccessToken ? `${baseUrl}/player-one?token=${game.playerOneAccessToken}` : '';
   const playerTwoJoinUrl = baseUrl && game.playerTwoAccessToken ? `${baseUrl}/player-two?token=${game.playerTwoAccessToken}` : '';
@@ -408,9 +423,15 @@ function AdminPageContent() {
           <CardDescription>Manage the game flow and player states.</CardDescription>
         </CardHeader>
         <CardContent className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          <Button onClick={handleStartRound} disabled={isStartingRound || game.status === 'active'} className="w-full bg-green-600 hover:bg-green-700">
-            <Play className="mr-2 h-4 w-4"/> Start Round
-          </Button>
+          {canFinalize ? (
+             <Button onClick={handleFinalizeRound} disabled={isFinalizing} className="w-full bg-orange-600 hover:bg-orange-700">
+                <CheckSquare className="mr-2 h-4 w-4"/> Finalize & Prepare Generation
+            </Button>
+          ) : (
+            <Button onClick={handleStartRound} disabled={isStartingRound || game.status === 'active'} className="w-full bg-green-600 hover:bg-green-700">
+              <Play className="mr-2 h-4 w-4"/> Start Round
+            </Button>
+          )}
            <Button onClick={handleGenerateImages} disabled={!canGenerateImages} className="w-full bg-blue-600 hover:bg-blue-700">
             {game.isGenerating ? <><LoadingSpinner className="mr-2"/>Generating...</> : <><Sparkles className="mr-2 h-4 w-4"/> Generate Images</>}
           </Button>

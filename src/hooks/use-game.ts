@@ -2,7 +2,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { doc, setDoc, onSnapshot, serverTimestamp, updateDoc, Timestamp, runTransaction, collection, addDoc, writeBatch, getDocs, query, where } from 'firebase/firestore';
+import { doc, setDoc, onSnapshot, serverTimestamp, updateDoc, Timestamp, runTransaction, collection, addDoc, writeBatch, getDocs, query, where, getDoc } from 'firebase/firestore';
 import { ref as storageRef, uploadString, getDownloadURL, deleteObject, listAll } from 'firebase/storage';
 import { db, storage } from '@/lib/firebase';
 import type { Game, GameStatus, PlayerKey, GeneratedImage } from '@/lib/types';
@@ -160,6 +160,36 @@ export function useGame() {
         throw e;
     }
   }, [updateGameData, toast]);
+
+   const endRoundAndFinalizePrompts = useCallback(async () => {
+    const gameDocRef = doc(db, "games", GAME_ID);
+    try {
+        await runTransaction(db, async (transaction) => {
+            const gameSnap = await transaction.get(gameDocRef);
+            if (!gameSnap.exists()) {
+                throw new Error("Game document does not exist!");
+            }
+            const currentGameData = gameSnap.data() as Game;
+            const updates: Partial<Game> = { status: 'completed' };
+
+            if (!currentGameData.playerOnePrompt) {
+                updates.playerOnePrompt = currentGameData.playerOneTypingPrompt || "No prompt submitted in time.";
+                updates.playerOneTypingPrompt = "";
+            }
+            if (!currentGameData.playerTwoPrompt) {
+                updates.playerTwoPrompt = currentGameData.playerTwoTypingPrompt || "No prompt submitted in time.";
+                updates.playerTwoTypingPrompt = "";
+            }
+            
+            transaction.update(gameDocRef, { ...updates, updatedAt: serverTimestamp() });
+        });
+        toast({ title: "Round Finalized", description: "Any unsubmitted prompts have been locked in from player's last input." });
+    } catch (e: any) {
+        console.error("Error finalizing round:", e);
+        toast({ title: "Finalization Failed", description: e.message, variant: "destructive" });
+        throw e;
+    }
+  }, [toast]);
   
   const generateImagesForPlayers = useCallback(async () => {
     if (!currentUser || !userProfile) {
@@ -380,5 +410,5 @@ export function useGame() {
   }, []);
 
 
-  return { game, loading, error, setCentralPrompt, submitPlayerPrompt, updatePlayerTypingPrompt, startRound, updateGameStatus, revealImages, resetRound, resetGame, updatePlayerLastSeen, setImageModel, generateNewSessionCodes, connectPlayerWithToken, disconnectPlayer, generateImagesForPlayers };
+  return { game, loading, error, setCentralPrompt, submitPlayerPrompt, updatePlayerTypingPrompt, startRound, updateGameStatus, revealImages, resetRound, resetGame, updatePlayerLastSeen, setImageModel, generateNewSessionCodes, connectPlayerWithToken, disconnectPlayer, generateImagesForPlayers, endRoundAndFinalizePrompts };
 }

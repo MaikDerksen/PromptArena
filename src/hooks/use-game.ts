@@ -1,4 +1,6 @@
 
+'use client';
+
 import { useState, useEffect, useCallback } from 'react';
 import { doc, setDoc, onSnapshot, serverTimestamp, updateDoc, Timestamp, runTransaction, collection, addDoc, writeBatch, getDocs, query, where } from 'firebase/firestore';
 import { ref as storageRef, uploadString, getDownloadURL, deleteObject, listAll } from 'firebase/storage';
@@ -51,6 +53,7 @@ const defaultGameData: Game = {
   playerTwoAccessToken: "",
   playerOneConnected: false,
   playerTwoConnected: false,
+  isGenerating: false,
 };
 
 export function useGame() {
@@ -139,92 +142,108 @@ export function useGame() {
     }
   }, [currentUser, toast]);
 
-
   const submitPlayerPrompt = useCallback(async (player: PlayerKey, playerPrompt: string, userId: string) => {
-    if (!userProfile && !userId.startsWith('session-')) {
-      toast({ title: "Authentication Error", description: "You must be logged in to submit a prompt.", variant: "destructive" });
-      throw new Error("User not authenticated");
-    }
-    
-    const gameModel = game?.imageModel || 'gemini-2.0-flash-preview-image-generation';
-    const cost = IMAGE_MODELS[gameModel as keyof typeof IMAGE_MODELS]?.cost || 1;
-    
-    // For credit deduction, we always need the admin/host user, even for session players.
-    if (!currentUser || !userProfile) {
-      toast({ title: "Host Error", description: "The game host must be logged in to fund image generation.", variant: "destructive" });
-      throw new Error("Game host not authenticated for credit deduction");
-    }
-    
-    if (userProfile.credits < cost) {
-      toast({ title: "Insufficient Credits", description: "The host does not have enough credits to generate an image.", variant: "destructive" });
-      throw new Error("Insufficient credits");
-    }
-
     const promptField = player === "playerOne" ? "playerOnePrompt" : "playerTwoPrompt";
-    const imageField = player === "playerOne" ? "playerOneImage" : "playerTwoImage";
     const typingField = player === "playerOne" ? "playerOneTypingPrompt" : "playerTwoTypingPrompt";
     const lastSeenField = player === "playerOne" ? "playerOneLastSeen" : "playerTwoLastSeen";
-
-    const gameDocRef = doc(db, "games", GAME_ID);
-    await updateDoc(gameDocRef, { 
-      [promptField]: playerPrompt,
-      [imageField]: "", 
-      [typingField]: "", 
-      [lastSeenField]: serverTimestamp(),
-      updatedAt: serverTimestamp()
-    });
     
     try {
-      const { imageUrl: imageDataUri } = await genImageFlow({ prompt: playerPrompt, model: gameModel });
+        await updateGameData({ 
+            [promptField]: playerPrompt,
+            [typingField]: "",
+            [lastSeenField]: serverTimestamp(),
+        });
+        toast({ title: "Prompt Submitted!", description: "Your prompt has been locked in. Waiting for admin to generate images." });
+    } catch(e) {
+        console.error("Error submitting prompt:", e);
+        toast({ title: "Error", description: "Could not submit your prompt. Please try again.", variant: "destructive" });
+        throw e;
+    }
+  }, [updateGameData, toast]);
+  
+  const generateImagesForPlayers = useCallback(async () => {
+    if (!currentUser || !userProfile) {
+      toast({ title: "Host Error", description: "The game host must be logged in to generate images.", variant: "destructive" });
+      throw new Error("Game host not authenticated for image generation.");
+    }
+    
+    if (!game || !game.playerOnePrompt || !game.playerTwoPrompt) {
+      toast({ title: "Generation Error", description: "Both players must submit a prompt before generating images.", variant: "destructive" });
+      throw new Error("Prompts are missing.");
+    }
 
-      if (!imageDataUri) {
-        throw new Error("Image generation returned no data.");
-      }
-      
-      const imageFileName = `${player}-${Date.now()}.png`;
-      // We associate the image with the HOST's UID for storage and ownership purposes.
-      const imagePath = `user-images/${currentUser.uid}/default-game/${imageFileName}`;
-      const sRef = storageRef(storage, imagePath);
-      
-      const uploadResult = await uploadString(sRef, imageDataUri, 'data_url');
-      const downloadURL = await getDownloadURL(uploadResult.ref);
+    const gameModel = game.imageModel || 'gemini-2.0-flash-preview-image-generation';
+    const costPerImage = IMAGE_MODELS[gameModel as keyof typeof IMAGE_MODELS]?.cost || 1;
+    const totalCost = costPerImage * 2;
+
+    if (userProfile.credits < totalCost) {
+      toast({ title: "Insufficient Credits", description: `The host needs at least ${totalCost} credits to generate both images.`, variant: "destructive" });
+      throw new Error("Insufficient credits.");
+    }
+
+    await updateGameData({ isGenerating: true });
+
+    try {
+      const generateAndUpload = async (prompt: string, playerKey: PlayerKey): Promise<{url: string, imageData: GeneratedImage}> => {
+        const { imageUrl: imageDataUri } = await genImageFlow({ prompt, model: gameModel });
+        if (!imageDataUri) throw new Error(`Image generation failed for ${playerKey}.`);
+        
+        const imageFileName = `${playerKey}-${Date.now()}.png`;
+        const imagePath = `user-images/${currentUser.uid}/default-game/${imageFileName}`;
+        const sRef = storageRef(storage, imagePath);
+        
+        const uploadResult = await uploadString(sRef, imageDataUri, 'data_url');
+        const downloadURL = await getDownloadURL(uploadResult.ref);
+
+        const generatedImageData: GeneratedImage = {
+            userId: currentUser.uid,
+            imageUrl: downloadURL,
+            prompt,
+            playerKey,
+            createdAt: Timestamp.now(),
+            model: gameModel,
+        };
+        return { url: downloadURL, imageData: generatedImageData };
+      };
+
+      const [playerOneResult, playerTwoResult] = await Promise.all([
+        generateAndUpload(game.playerOnePrompt, 'playerOne'),
+        generateAndUpload(game.playerTwoPrompt, 'playerTwo')
+      ]);
 
       const userDocRef = doc(db, 'users', currentUser.uid);
+      const gameDocRef = doc(db, "games", GAME_ID);
+      const p1ImageDocRef = collection(db, 'generated_images');
+      const p2ImageDocRef = collection(db, 'generated_images');
+
       await runTransaction(db, async (transaction) => {
         const userDocSnap = await transaction.get(userDocRef);
-        if (!userDocSnap.exists()) {
-          throw "Host user document does not exist!";
+        if (!userDocSnap.exists() || userDocSnap.data().credits < totalCost) {
+          throw new Error("Insufficient credits.");
         }
-        const currentCredits = userDocSnap.data().credits;
-        if (currentCredits < cost) {
-          throw "Insufficient credits. Please purchase more.";
-        }
-        transaction.update(userDocRef, { credits: currentCredits - cost });
-        transaction.update(gameDocRef, { [imageField]: downloadURL, [lastSeenField]: serverTimestamp(), updatedAt: serverTimestamp() });
+        
+        transaction.update(userDocRef, { credits: userDocSnap.data().credits - totalCost });
+        
+        transaction.update(gameDocRef, { 
+          playerOneImage: playerOneResult.url,
+          playerTwoImage: playerTwoResult.url,
+          isGenerating: false,
+        });
+
+        transaction.set(doc(p1ImageDocRef), playerOneResult.imageData);
+        transaction.set(doc(p2ImageDocRef), playerTwoResult.imageData);
       });
 
-      const generatedImageData: GeneratedImage = {
-          userId: currentUser.uid, // The image belongs to the host user
-          imageUrl: downloadURL,
-          prompt: playerPrompt,
-          playerKey: player,
-          createdAt: Timestamp.now(),
-          model: gameModel,
-      };
-      await addDoc(collection(db, 'generated_images'), generatedImageData);
-      
       await refreshUserProfile();
-      toast({ title: "Submission Successful", description: "Image generated!" });
-      return downloadURL;
+      toast({ title: "Images Generated!", description: "Both images have been successfully generated." });
 
     } catch (e: any) {
-      console.error(`Error in submitPlayerPrompt transaction for ${player}:`, e);
-      const errorMessage = e.message || "An unknown error occurred during image processing.";
-      toast({ title: "Image Processing Failed", description: errorMessage, variant: "destructive" });
-      await updateDoc(gameDocRef, { [promptField]: "", [lastSeenField]: serverTimestamp(), updatedAt: serverTimestamp() });
-      throw new Error(errorMessage);
+      console.error("Error generating images for players:", e);
+      toast({ title: "Image Generation Failed", description: e.message || "An unknown error occurred.", variant: "destructive" });
+      await updateGameData({ isGenerating: false });
+      throw e;
     }
-  }, [currentUser, userProfile, toast, refreshUserProfile, game?.imageModel]);
+  }, [currentUser, userProfile, game, toast, updateGameData, refreshUserProfile]);
   
   const startRound = useCallback(async (durationInSeconds: number) => {
     if (isNaN(durationInSeconds) || durationInSeconds <= 0) {
@@ -261,6 +280,7 @@ export function useGame() {
       imagesRevealed: false, 
       status: "waiting",
       roundEndsAt: null,
+      isGenerating: false,
       roundDuration: game?.roundDuration || defaultGameData.roundDuration,
     };
     if (newCentralPrompt !== undefined && newCentralPrompt.trim() !== "") {
@@ -277,9 +297,8 @@ export function useGame() {
   const resetGame = useCallback(async () => {
     const gameDocRef = doc(db, "games", GAME_ID);
     
-    // Clear all generated images associated with the default game
     try {
-        const imagesQuery = query(collection(db, 'generated_images'), where('userId', '!=', '')); // Query all for simplicity, can be refined
+        const imagesQuery = query(collection(db, 'generated_images'), where('userId', '!=', '')); 
         const imagesSnapshot = await getDocs(imagesQuery);
         const batch = writeBatch(db);
         
@@ -292,7 +311,6 @@ export function useGame() {
             await batch.commit();
         }
 
-        // Clear storage folder if host UID was found
         if (hostUid) {
             const gameStorageRef = storageRef(storage, `user-images/${hostUid}/default-game`);
             const files = await listAll(gameStorageRef);
@@ -362,5 +380,5 @@ export function useGame() {
   }, []);
 
 
-  return { game, loading, error, setCentralPrompt, submitPlayerPrompt, updatePlayerTypingPrompt, startRound, updateGameStatus, revealImages, resetRound, resetGame, updatePlayerLastSeen, setImageModel, generateNewSessionCodes, connectPlayerWithToken, disconnectPlayer };
+  return { game, loading, error, setCentralPrompt, submitPlayerPrompt, updatePlayerTypingPrompt, startRound, updateGameStatus, revealImages, resetRound, resetGame, updatePlayerLastSeen, setImageModel, generateNewSessionCodes, connectPlayerWithToken, disconnectPlayer, generateImagesForPlayers };
 }

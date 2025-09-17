@@ -72,7 +72,7 @@ export default function ViewerPage() {
               <CardDescription className="text-lg">Status:</CardDescription>
               <GameStatusBadge status={game.status} className="text-md px-4 py-1.5" />
             </div>
-            {game.status === 'active' && <RoundTimer endTime={game.roundEndsAt ?? null} status={game.status} className="text-primary text-lg"/>}
+            {game.status === 'active' && <RoundTimer endTime={game.roundEndsAt ?? null} status={game.status} className="text-lg text-primary"/>}
           </div>
         </CardHeader>
         <CardContent>
@@ -80,8 +80,11 @@ export default function ViewerPage() {
           <h2 className="text-2xl md:text-3xl font-bold font-headline text-primary break-words">
             {game.prompt || "Waiting for admin to set a prompt..."}
           </h2>
-           {game.status === 'active' && !game.imagesRevealed && (!!game.playerOneImage || !!game.playerTwoImage) && (
-            <p className="text-sm text-accent mt-2 animate-pulse">Images are generated... Waiting for Admin to reveal them!</p>
+           {game.isGenerating && (
+             <p className="text-sm text-accent mt-2 animate-pulse">Admin has started image generation... this might take a moment!</p>
+           )}
+           {!game.isGenerating && !game.imagesRevealed && (!!game.playerOneImage || !!game.playerTwoImage) && (
+            <p className="text-sm text-accent mt-2 animate-pulse">Images are ready! Waiting for Admin to reveal them!</p>
           )}
         </CardContent>
       </Card>
@@ -96,7 +99,7 @@ export default function ViewerPage() {
             cardClassName="lg:col-span-1 shadow-lg"
             imagesRevealed={!!game.imagesRevealed}
             isLiveTypingView={true}
-            isGenerating={game.status === 'active' && !!game.playerOnePrompt && !game.playerOneImage}
+            isGenerating={game.isGenerating}
           />
         ) : (
            <QRCodeJoinCard playerName="Player One" joinUrl={playerOneJoinUrl} />
@@ -111,7 +114,7 @@ export default function ViewerPage() {
             cardClassName="lg:col-span-1 shadow-lg"
             imagesRevealed={!!game.imagesRevealed}
             isLiveTypingView={true}
-            isGenerating={game.status === 'active' && !!game.playerTwoPrompt && !game.playerTwoImage}
+            isGenerating={game.isGenerating}
           />
         ) : (
           <QRCodeJoinCard playerName="Player Two" joinUrl={playerTwoJoinUrl} />

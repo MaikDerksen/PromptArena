@@ -23,7 +23,7 @@ import { useGame, IMAGE_MODELS } from '@/hooks/use-game';
 import LoadingSpinner from '@/components/loading-spinner';
 import ImageCard from '@/components/image-card';
 import GameStatusBadge from '@/components/game-status-badge';
-import { AlertCircle, Edit3, Play, RotateCcw, SkipForward, Eye, UserCheck, UserX, Image as ImageIcon, CheckCircle, Wifi, HelpCircle, CreditCard, Settings, Timer, Trash2, GalleryThumbnails, QrCode } from 'lucide-react';
+import { AlertCircle, Edit3, Play, RotateCcw, SkipForward, Eye, UserCheck, UserX, Image as ImageIcon, CheckCircle, Wifi, HelpCircle, CreditCard, Settings, Timer, Trash2, GalleryThumbnails, QrCode, Sparkles } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Timestamp } from 'firebase/firestore';
 import { generateImage } from '@/ai/flows/generate-image'; 
@@ -51,7 +51,7 @@ const formatLastSeen = (lastSeen: Timestamp | Date | null): {text: string, icon:
 
 
 function AdminPageContent() {
-  const { game, loading: gameLoading, error: gameError, setCentralPrompt, startRound, updateGameStatus, revealImages, resetRound, resetGame, setImageModel, generateNewSessionCodes } = useGame();
+  const { game, loading: gameLoading, error: gameError, setCentralPrompt, startRound, updateGameStatus, revealImages, resetRound, resetGame, setImageModel, generateNewSessionCodes, generateImagesForPlayers } = useGame();
   const { userProfile, loading: authLoading, deleteCurrentUserAccount } = useAuth();
   const { toast } = useToast();
   
@@ -60,6 +60,7 @@ function AdminPageContent() {
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
   const [isRevealingImages, setIsRevealingImages] = useState(false);
   const [isStartingRound, setIsStartingRound] = useState(false);
+  const [isGeneratingImages, setIsGeneratingImages] = useState(false);
   const [isDeletingAccount, setIsDeletingAccount] = useState(false);
   const [isGeneratingCodes, setIsGeneratingCodes] = useState(false);
 
@@ -154,6 +155,17 @@ function AdminPageContent() {
     }
   }
 
+  const handleGenerateImages = async () => {
+    setIsGeneratingImages(true);
+    try {
+      await generateImagesForPlayers();
+    } catch (error: any) {
+      // Error toast is handled within the hook
+    } finally {
+      setIsGeneratingImages(false);
+    }
+  }
+
   const handleTestApi = async () => {
     setIsTestingApi(true);
     setApiTestResult(null);
@@ -204,7 +216,8 @@ function AdminPageContent() {
   
   const playerOneActivity = formatLastSeen(game.playerOneLastSeen || null);
   const playerTwoActivity = formatLastSeen(game.playerTwoLastSeen || null);
-  const canRevealImages = (!!game.playerOneImage || !!game.playerTwoImage) && !game.imagesRevealed && (game.status === 'active' || game.status === 'completed');
+  const canRevealImages = (!!game.playerOneImage || !!game.playerTwoImage) && !game.imagesRevealed;
+  const canGenerateImages = !!game.playerOnePrompt && !!game.playerTwoPrompt && !game.playerOneImage && !game.playerTwoImage && !game.isGenerating;
 
   const playerOneJoinUrl = baseUrl && game.playerOneAccessToken ? `${baseUrl}/player-one?token=${game.playerOneAccessToken}` : '';
   const playerTwoJoinUrl = baseUrl && game.playerTwoAccessToken ? `${baseUrl}/player-two?token=${game.playerTwoAccessToken}` : '';
@@ -398,24 +411,24 @@ function AdminPageContent() {
           <Button onClick={handleStartRound} disabled={isStartingRound || game.status === 'active'} className="w-full bg-green-600 hover:bg-green-700">
             <Play className="mr-2 h-4 w-4"/> Start Round
           </Button>
-          <Button onClick={() => handleUpdateStatus('waiting')} disabled={isUpdatingStatus || game.status === 'waiting'} className="w-full bg-yellow-500 hover:bg-yellow-600 text-black">
-            Pause Round (Waiting)
-          </Button>
-          <Button onClick={() => handleUpdateStatus('completed')} disabled={isUpdatingStatus || game.status === 'completed'} className="w-full">
-            End Round (Completed)
+           <Button onClick={handleGenerateImages} disabled={!canGenerateImages} className="w-full bg-blue-600 hover:bg-blue-700">
+            {game.isGenerating ? <><LoadingSpinner className="mr-2"/>Generating...</> : <><Sparkles className="mr-2 h-4 w-4"/> Generate Images</>}
           </Button>
           <Button onClick={handleRevealImages} disabled={isRevealingImages || !canRevealImages} className="w-full">
-            {isRevealingImages ? <><LoadingSpinner className="mr-2"/>Revealing...</> : <><ImageIcon className="mr-2 h-4 w-4"/> Reveal Images to Viewers</>}
+            {isRevealingImages ? <><LoadingSpinner className="mr-2"/>Revealing...</> : <><ImageIcon className="mr-2 h-4 w-4"/> Reveal Images</>}
+          </Button>
+          <Button onClick={() => handleUpdateStatus('waiting')} disabled={isUpdatingStatus || game.status === 'waiting'} className="w-full bg-yellow-500 hover:bg-yellow-600 text-black">
+            Pause Round
           </Button>
           <Button onClick={handleResetRound} variant="outline" disabled={isUpdatingStatus} className="w-full">
-           <SkipForward className="mr-2 h-4 w-4"/> Next Round (Clear Submissions)
+           <SkipForward className="mr-2 h-4 w-4"/> Next Round
           </Button>
           <Button onClick={handleResetGame} variant="destructive" className="w-full">
            <RotateCcw className="mr-2 h-4 w-4"/> Reset Entire Game
           </Button>
         </CardContent>
          <CardFooter>
-          <p className="text-xs text-muted-foreground">"Next Round" clears submissions, hides images, sets status to 'waiting'. "Reset Game" clears all data.</p>
+          <p className="text-xs text-muted-foreground">"Generate Images" will appear when both players have submitted prompts. "Next Round" clears submissions, hides images, sets status to 'waiting'.</p>
         </CardFooter>
       </Card>
 
@@ -431,7 +444,7 @@ function AdminPageContent() {
             imageUrl={game.playerOneImage}
             isLiveTypingView={false} 
             imagesRevealed={true} 
-            isGenerating={game.status === 'active' && !!game.playerOnePrompt && !game.playerOneImage}
+            isGenerating={game.isGenerating}
           />
           <ImageCard
             playerName="Player Two"
@@ -439,7 +452,7 @@ function AdminPageContent() {
             imageUrl={game.playerTwoImage}
             isLiveTypingView={false} 
             imagesRevealed={true} 
-            isGenerating={game.status === 'active' && !!game.playerTwoPrompt && !game.playerTwoImage}
+            isGenerating={game.isGenerating}
           />
         </CardContent>
       </Card>

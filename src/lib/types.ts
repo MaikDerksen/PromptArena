@@ -29,6 +29,9 @@ export interface Game {
   playerTwoAccessToken?: string;
   playerOneConnected?: boolean;
   playerTwoConnected?: boolean;
+
+  // Admin-triggered generation
+  isGenerating?: boolean;
 }
 
 export type PlayerKey = "playerOne" | "playerTwo";

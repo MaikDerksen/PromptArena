@@ -43,10 +43,10 @@ export default function ImageCard({
     }
   } else { // For player's own submission view or admin's view
     displayPromptLabel = "Submitted Prompt:";
-    if (isGenerating && !finalPrompt) {
-      displayPromptText = "Generating based on your input...";
+    if (finalPrompt) {
+        displayPromptText = finalPrompt;
     } else {
-      displayPromptText = finalPrompt || "No prompt submitted yet.";
+        displayPromptText = "No prompt submitted yet.";
     }
   }
   
@@ -82,7 +82,7 @@ export default function ImageCard({
           {isGenerating && (
             <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/50 z-10">
               <LoadingSpinner className="w-12 h-12 text-primary" />
-              <p className="mt-2 text-sm text-primary-foreground">Generating Image...</p>
+              <p className="mt-2 text-sm text-primary-foreground">Generating Images...</p>
             </div>
           )}
 

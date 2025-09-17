@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
@@ -74,7 +75,7 @@ export default function PlayerPromptForm({ playerKey, playerName, sessionUserId 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!effectiveUserId) {
-      toast({title: "Not Logged In", description: "You must be logged in to submit a prompt.", variant: "destructive"});
+      toast({title: "Not Logged In", description: "You must be logged in or have a valid session to submit a prompt.", variant: "destructive"});
       return;
     }
 
@@ -89,7 +90,7 @@ export default function PlayerPromptForm({ playerKey, playerName, sessionUserId 
     try {
       await submitPlayerPrompt(playerKey, promptInput, effectiveUserId);
     } catch (err: any) {      
-      setError(err.message || "Failed to submit prompt or generate image.");
+      setError(err.message || "Failed to submit prompt.");
     } finally {
       setIsSubmitting(false);
     }
@@ -147,7 +148,7 @@ export default function PlayerPromptForm({ playerKey, playerName, sessionUserId 
                 <CheckCircle className="h-4 w-4 text-green-500" />
                 <AlertTitle>Prompt Submitted & Locked!</AlertTitle>
                 <AlertDescription>
-                  Your submission is locked in for this round. Good luck!
+                  Your submission is locked in for this round. Waiting for the admin to generate the images. Good luck!
                 </AlertDescription>
             </Alert>
            )}
@@ -185,7 +186,7 @@ export default function PlayerPromptForm({ playerKey, playerName, sessionUserId 
               className="w-full text-lg py-4 md:py-6" 
               disabled={!promptInput.trim() || isSubmitting || !canSubmit}
             >
-              {isSubmitting ? <><LoadingSpinner className="mr-2" /> Submitting & Generating...</> : 'Submit & Generate'}
+              {isSubmitting ? <><LoadingSpinner className="mr-2" /> Submitting...</> : 'Submit Prompt'}
             </Button>
           </form>
         </CardContent>
@@ -196,7 +197,7 @@ export default function PlayerPromptForm({ playerKey, playerName, sessionUserId 
         finalPrompt={finalSubmittedPrompt || null} 
         typingPrompt={isRoundActive && !hasSubmitted ? promptInput : undefined} 
         imageUrl={currentImage || null}
-        isGenerating={isSubmitting || (hasSubmitted && !currentImage)} 
+        isGenerating={game.isGenerating} 
         cardClassName="bg-card/50"
         imagesRevealed={true}
         isLiveTypingView={false} 
